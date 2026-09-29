@@ -1,19 +1,26 @@
 package com.beacepl.service_request_service.controller;
 
-import com.beacepl.service_request_service.ResponseMessageUtil;
-import com.beacepl.service_request_service.exceptions.OtpNotFoundException;
-import com.beacepl.service_request_service.exceptions.OtpNotMatchException;
-import com.beacepl.service_request_service.model.*;
-import com.beacepl.service_request_service.service.impl.ServiceRequestService;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.beacepl.service_request_service.entity.ServiceRequestEntity;
+import com.beacepl.service_request_service.enums.ServiceRequestStatus;
+import com.beacepl.service_request_service.model.ServiceRequestSubmitDto;
+import com.beacepl.service_request_service.model.ServiceResponse;
+import com.beacepl.service_request_service.service.impl.ServiceRequestServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,129 +30,109 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ServiceRequestController {
 
-//    private final ServiceRequestService serviceRequestService;
-//
-//    @PostMapping("/submit")
-//    public ServiceResponse submitServiceRequest(@RequestBody GenericServiceRequestDto requestDto) throws JsonProcessingException {
-//        log.info("Received dynamic request for service: {}", requestDto.getServiceName());
-//        return serviceRequestService.submitServiceRequest(requestDto);
-//    }
-//
-//    @GetMapping("/previous-requests")
-//    public ServiceResponse getPreviousServiceRequests(@RequestParam String mobileNumber) throws JsonProcessingException {
-//        log.info("Received request to fetch previous service requests for mobile: {}", mobileNumber);
-//        return serviceRequestService.getPreviousServiceRequests(mobileNumber);
-//    }
-//
-//    @GetMapping("/service-request-list")
-//    public ServiceResponse getServiceRequestList() throws JsonProcessingException {
-//        log.info("Received request to fetch service request list");
-//        return serviceRequestService.getServiceRequestList();
-//    }
-//
-//    @GetMapping("/service-request-list/{name}/{mobileNumber}")
-//    public ServiceResponse getServiceRequestListByName(@PathVariable String name, @PathVariable String mobileNumber) throws JsonProcessingException {
-//        log.info("Received request to fetch service request details for service: {} and mobile: {}", name, mobileNumber);
-//        return serviceRequestService.getServiceRequestListByName(name, mobileNumber);
-//    }
-//
-//    @GetMapping("/form-fields")
-//    public ServiceResponse getServiceRequestForm(@RequestParam("name") String name, @RequestParam("mobileNumber") String mobileNumber) throws JsonProcessingException {
-//        log.info("Received request for form-fields for service: {} and mobile: {}", name, mobileNumber);
-//        return serviceRequestService.getServiceRequestListByName(name, mobileNumber);
-//    }
-//
-//    // Deprecated legacy endpoints kept for backward compatibility
-//    @PostMapping("/change-mobile")
-//    public ServiceResponse changeMobileNumber(@RequestBody ChangeMobileRequestDto changeMobileRequestDto) {
-//        return serviceRequestService.changeMobileNumber(changeMobileRequestDto);
-//    }
-//
-//    @PostMapping("/change-email")
-//    public ServiceResponse changeEmail(@RequestBody ChangeEmailRequestDto changeEmailRequestDto) {
-//        log.info("Received request to change email to: {}", changeEmailRequestDto.getEmail());
-//        return serviceRequestService.changeEmail(changeEmailRequestDto);
-//    }
-//
-//    @PostMapping(value = "/change-bank-account", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-//    public ServiceResponse changeBankAccount(
-//            @ModelAttribute ChangeBankRequestDto changeBankRequestDto,
-//            @RequestParam("chequeLeaf") MultipartFile chequeLeaf) throws IOException {
-//        log.info("Received request to change bank account to: {}", changeBankRequestDto.getBankAccountNumber());
-//        return serviceRequestService.changeBankAccount(changeBankRequestDto, chequeLeaf);
-//    }
-//
-//    @PostMapping(
-//            value = "/tin",
-//            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-//    )
-//    public ServiceResponse submitTinChangeRequest(
-//            @ModelAttribute TinChangeRequestDto requestDto) throws Exception {
-//
-//        return serviceRequestService.submitTinChangeRequest(requestDto);
-//    }
-//
-//
-//    @PostMapping(
-//            value = "/nominee",
-//            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
-//    )
-//    public ServiceResponse submitNomineeChangeRequest(
-//            @ModelAttribute NomineeChangeRequestDto requestDto) throws Exception {
-//
-//        return serviceRequestService.submitNomineeChangeRequest(requestDto);
-//    }
-
-
-
-    private final ServiceRequestService serviceRequestService;
+    private final ServiceRequestServiceImpl serviceRequestService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * Generic User Submission API accepting application/json.
+     * POST /service-request/submit
+     */
+    @PostMapping(value = "/submit", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ServiceResponse<ServiceRequestEntity> submitJson(
+            @RequestBody ServiceRequestSubmitDto requestDto
+    ) throws Exception {
+        log.info("Received JSON service request submission for service: {}", requestDto.getServiceName());
+        return serviceRequestService.submitServiceRequest(requestDto, null);
+    }
+
+    /**
+     * Generic User Submission API accepting multipart/form-data.
+     * POST /service-request/submit
+     */
     @PostMapping(value = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ServiceResponse submitServiceRequest(
-            @RequestPart("requestData") String requestDataJson,
-            @RequestParam Map<String, MultipartFile> allParts) throws Exception {
-        try {
+    public ServiceResponse<ServiceRequestEntity> submitMultipart(
+            @RequestPart(value = "requestData", required = false) String requestDataJson,
+            MultipartHttpServletRequest multipartRequest
+    ) throws Exception {
+        ServiceRequestSubmitDto dto;
 
-            ServiceRequestSubmitDto dto = objectMapper.readValue(requestDataJson, ServiceRequestSubmitDto.class);
-            log.info("Received service request submission for service: {}", dto.getServiceName());
-
-            // "allParts" (bound via @RequestParam Map<String, MultipartFile>) picks up
-            // every multipart part that Spring can resolve as a MultipartFile - i.e.
-            // every file part except requestData itself.
-            Map<String, MultipartFile> files = new HashMap<>(allParts);
-            files.remove("requestData");
-
-            return serviceRequestService.submitServiceRequest(dto, files);
-
-        } catch (OtpNotFoundException e) {
-            ServiceRequestSubmitDto requestSubmitDto = objectMapper.readValue(requestDataJson, ServiceRequestSubmitDto.class);
-            return ResponseMessageUtil.otpRequiredResponse(requestSubmitDto.getMobileNumber(), requestSubmitDto.getEmailAddress());
-        } catch (OtpNotMatchException e) {
-            return new ServiceResponse("OTP did not match", "428");
+        if (requestDataJson != null && !requestDataJson.isBlank()) {
+            dto = objectMapper.readValue(requestDataJson, ServiceRequestSubmitDto.class);
+        } else {
+            // Read parameters from multipart form fields
+            dto = ServiceRequestSubmitDto.builder()
+                    .serviceName(multipartRequest.getParameter("serviceName"))
+                    .accountId(multipartRequest.getParameter("accountId"))
+                    .mobileNumber(multipartRequest.getParameter("mobileNumber"))
+                    .investorCode(multipartRequest.getParameter("investorCode"))
+                    .email(multipartRequest.getParameter("email"))
+                    .action(multipartRequest.getParameter("action"))
+                    .listItemIdentifierValue(multipartRequest.getParameter("listItemIdentifierValue"))
+                    .fields(extractFieldsFromParams(multipartRequest.getParameterMap()))
+                    .build();
         }
+
+        Map<String, MultipartFile> uploadedFiles = new HashMap<>(multipartRequest.getFileMap());
+        uploadedFiles.remove("requestData");
+
+        log.info("Received Multipart service request submission for service: {}, uploaded files count: {}",
+                dto.getServiceName(), uploadedFiles.size());
+
+        return serviceRequestService.submitServiceRequest(dto, uploadedFiles);
     }
 
-
-
-    @GetMapping("/previous-requests")
-    public ServiceResponse getPreviousServiceRequests(@RequestParam String mobileNumber) {
-        log.info("Received request to fetch previous service requests for mobile: {}", mobileNumber);
-        return serviceRequestService.getPreviousServiceRequests(mobileNumber);
+    /**
+     * Retrieve user service request history.
+     * GET /service-request/my-requests
+     */
+    @GetMapping("/my-requests")
+    public ServiceResponse<Page<ServiceRequestEntity>> getMyRequests(
+            @RequestParam(required = false) String accountId,
+            @RequestParam(required = false) String mobileNumber,
+            @RequestParam(required = false) String investorCode,
+            @RequestParam(required = false) ServiceRequestStatus status,
+            @RequestParam(required = false) String serviceName,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        String identifier = accountId != null ? accountId : (investorCode != null ? investorCode : mobileNumber);
+        if (identifier == null || identifier.isBlank()) {
+            identifier = "";
+        }
+        return serviceRequestService.getUserRequests(identifier, status, serviceName, page, size);
     }
 
-    @GetMapping("/service-request-list")
-    public ServiceResponse getServiceRequestList() {
-        log.info("Received request to fetch service request list");
-        return serviceRequestService.getServiceRequestList();
+    /**
+     * Fetch a specific request by ID.
+     * GET /service-request/{id}
+     */
+    @GetMapping("/{id}")
+    public ServiceResponse<ServiceRequestEntity> getRequestById(@PathVariable String id) {
+        return serviceRequestService.getRequestById(id);
     }
 
-    /** Field configuration for one service type (dynamic form definition) + the requesters history for it. */
-    @GetMapping(value = "/form-fields" , produces = MediaType.APPLICATION_JSON_VALUE)
-    public ServiceResponse getServiceRequestForm(@RequestParam("name") String name,
-                                                 @RequestParam("mobileNumber") String mobileNumber) {
-        log.info("Received request for form-fields for service: {} and mobile: {}", name, mobileNumber);
-        return serviceRequestService.getServiceRequestListByName(name, mobileNumber);
+    private Map<String, Object> extractFieldsFromParams(Map<String, String[]> paramMap) {
+        Map<String, Object> fields = new HashMap<>();
+        if (paramMap == null) return fields;
+
+        for (Map.Entry<String, String[]> entry : paramMap.entrySet()) {
+            String key = entry.getKey();
+            if (isReservedParam(key)) continue;
+            String[] values = entry.getValue();
+            if (values != null && values.length > 0) {
+                fields.put(key, values[0]);
+            }
+        }
+        return fields;
     }
 
+    private boolean isReservedParam(String paramName) {
+        return "serviceName".equalsIgnoreCase(paramName) ||
+                "accountId".equalsIgnoreCase(paramName) ||
+                "mobileNumber".equalsIgnoreCase(paramName) ||
+                "investorCode".equalsIgnoreCase(paramName) ||
+                "email".equalsIgnoreCase(paramName) ||
+                "action".equalsIgnoreCase(paramName) ||
+                "listItemIdentifierValue".equalsIgnoreCase(paramName);
+    }
 }

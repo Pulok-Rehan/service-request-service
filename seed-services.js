@@ -1,223 +1,193 @@
-// MongoDB initialization / seed script for 'services' collection
-// Compatible with ServiceCategory, ServiceRequestDefinition, FormField, and RequestBodyConfig entities.
+// MongoDB seed script for ServiceRequestConfig collection
+// Run via mongosh: mongosh "mongodb://localhost:27017/service_request" seed-services.js
 
-// Replace 'your_database_name' with your actual database name if executing via mongosh:
-// use your_database_name;
+db.ServiceRequestConfig.drop();
 
-db.services.drop();
-
-db.services.insertMany([
+db.ServiceRequestConfig.insertMany([
   {
-    "_id": ObjectId("69f9c60043f263b26a7a6f2e"),
-    "name": "Personal Information",
-    "order": 1,
+    "serviceName": "MOBILE_CHANGE",
+    "displayName": "Change Mobile Number",
+    "description": "Request to update your primary account mobile number",
     "active": true,
-    "description": "Update your personal information",
-    "icon": "USER",
-    "_class": "com.beacepl.service_request_service.entity.ServiceCategory",
-    "serviceRequestList": [
+    "multipart": false,
+    "listBased": false,
+    "targetListField": null,
+    "listIdentifierField": null,
+    "allowedActions": ["EDIT"],
+    "section": "PERSONAL_DETAILS",
+    "sectionDisplayName": "Personal Details",
+    "sectionOrder": 1,
+    "displayOrder": 1,
+    "fields": [
       {
-        "name": "Address",
-        "order": 1,
-        "active": true,
-        "action": "UPDATE",
-        "apiEndpoint": "http://localhost:8085/service-request/submit",
-        "description": "Update permanent address, present address",
-        "formFields": [
-          {
-            "name": "Present Address",
-            "parameterName": "addressLine1",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Utility Bill Copy",
-            "parameterName": "billCopy",
-            "uiType": "image",
-            "required": false
-          }
-        ],
-        "body": {
-          "type": "POST",
-          "requiredFields": [
-            "mobileNumber",
-            "email",
-            "serviceName",
-            "request",
-            "otp"
-          ]
-        }
-      },
-      {
-        "name": "Personal Information",
-        "order": 2,
-        "active": true,
-        "action": "UPDATE",
-        "apiEndpoint": "http://localhost:8085/service-request/submit",
-        "description": "Update name, date of birth, father' name, mother's name",
-        "formFields": [
-          {
-            "name": "Name",
-            "parameterName": "name",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Date of Birth",
-            "parameterName": "dateOfBirth",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Father's Name",
-            "parameterName": "fathersName",
-            "uiType": "text",
-            "required": false
-          },
-          {
-            "name": "Mother's Name",
-            "parameterName": "mothersName",
-            "uiType": "text",
-            "required": false
-          }
-        ],
-        "body": {
-          "type": "POST",
-          "requiredFields": [
-            "mobileNumber",
-            "email",
-            "serviceName",
-            "request",
-            "otp"
-          ]
-        }
+        "fieldName": "newMobileNumber",
+        "label": "New Mobile Number",
+        "dataType": "NUMBER",
+        "required": true,
+        "validationRegex": "^01[3-9]\\d{8}$",
+        "accountFieldPath": "mobileNumber",
+        "file": false
       }
-    ]
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
   },
   {
-    "_id": ObjectId("6a02bbac70ae07f7967988fa"),
-    "name": "Bank Information",
-    "order": 2,
+    "serviceName": "EMAIL_CHANGE",
+    "displayName": "Change Email Address",
+    "description": "Request to update your registered email address",
     "active": true,
-    "description": "Update bank and account details",
-    "icon": "BANK",
-    "_class": "com.beacepl.service_request_service.entity.ServiceCategory",
-    "serviceRequestList": [
+    "multipart": false,
+    "listBased": false,
+    "targetListField": null,
+    "listIdentifierField": null,
+    "allowedActions": ["EDIT"],
+    "section": "PERSONAL_DETAILS",
+    "sectionDisplayName": "Personal Details",
+    "sectionOrder": 1,
+    "displayOrder": 2,
+    "fields": [
       {
-        "name": "Bank Information",
-        "order": 1,
-        "active": true,
-        "action": "UPDATE",
-        "apiEndpoint": "http://localhost:8085/service-request/submit",
-        "description": "Update bank, branch, account number",
-        "formFields": [
-          {
-            "name": "Bank Name",
-            "parameterName": "bankName",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Account Number",
-            "parameterName": "accountNo",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Branch Name",
-            "parameterName": "branchName",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Routing Number",
-            "parameterName": "routingNumber",
-            "uiType": "text",
-            "required": true
-          },
-          {
-            "name": "Upload Cheque Leaf",
-            "parameterName": "chequeLeaf",
-            "uiType": "image",
-            "required": false
-          }
-        ],
-        "body": {
-          "type": "POST",
-          "requiredFields": [
-            "mobileNumber",
-            "email",
-            "serviceName",
-            "request",
-            "otp"
-          ]
-        }
+        "fieldName": "newEmailAddress",
+        "label": "New Email Address",
+        "dataType": "EMAIL",
+        "required": true,
+        "validationRegex": null,
+        "accountFieldPath": "emailAddress",
+        "file": false
       }
-    ]
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
   },
   {
-    "_id": ObjectId("6a741095c1fe9ad3676772db"),
-    "name": "Contact Information",
-    "order": 3,
+    "serviceName": "ADDRESS_CHANGE",
+    "displayName": "Change Address",
+    "description": "Request to update your residential address details",
     "active": true,
-    "description": "Update your email address, mobile number",
-    "icon": "CONTACT",
-    "_class": "com.beacepl.service_request_service.entity.ServiceCategory",
-    "serviceRequestList": [
-      {
-        "name": "Mobile Number",
-        "order": 1,
-        "active": true,
-        "action": "UPDATE",
-        "apiEndpoint": "http://localhost:8085/service-request/submit",
-        "description": "Update your mobile number",
-        "formFields": [
-          {
-            "name": "Mobile Number",
-            "parameterName": "mobileNumber",
-            "uiType": "text",
-            "required": true
-          }
-        ],
-        "body": {
-          "type": "POST",
-          "requiredFields": [
-            "mobileNumber",
-            "email",
-            "serviceName",
-            "request",
-            "otp"
-          ]
-        }
-      },
-      {
-        "name": "Email Address",
-        "order": 2,
-        "active": true,
-        "action": "UPDATE",
-        "apiEndpoint": "http://localhost:8085/service-request/submit",
-        "description": "Update your email address",
-        "formFields": [
-          {
-            "name": "Email Address",
-            "parameterName": "emailAddress",
-            "uiType": "text",
-            "required": true
-          }
-        ],
-        "body": {
-          "type": "POST",
-          "requiredFields": [
-            "mobileNumber",
-            "email",
-            "serviceName",
-            "request",
-            "otp"
-          ]
-        }
-      }
-    ]
+    "multipart": false,
+    "listBased": false,
+    "targetListField": null,
+    "listIdentifierField": null,
+    "allowedActions": ["EDIT"],
+    "section": "CONTACT_INFO",
+    "sectionDisplayName": "Contact Information",
+    "sectionOrder": 2,
+    "displayOrder": 1,
+    "fields": [
+      { "fieldName": "addressLine1", "label": "Address Line 1", "dataType": "TEXT", "required": true, "accountFieldPath": "addressLine1", "file": false },
+      { "fieldName": "addressLine2", "label": "Address Line 2", "dataType": "TEXT", "required": false, "accountFieldPath": "addressLine2", "file": false },
+      { "fieldName": "city", "label": "City", "dataType": "TEXT", "required": true, "accountFieldPath": "city", "file": false },
+      { "fieldName": "state", "label": "State", "dataType": "TEXT", "required": true, "accountFieldPath": "state", "file": false },
+      { "fieldName": "zipCode", "label": "Zip Code", "dataType": "TEXT", "required": true, "accountFieldPath": "zipCode", "file": false },
+      { "fieldName": "country", "label": "Country", "dataType": "TEXT", "required": true, "accountFieldPath": "country", "file": false }
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
+  },
+  {
+    "serviceName": "TIN_CHANGE",
+    "displayName": "Change TIN Information",
+    "description": "Add or update your Tax Identification Number and certificate",
+    "active": true,
+    "multipart": true,
+    "listBased": false,
+    "targetListField": null,
+    "listIdentifierField": null,
+    "allowedActions": ["ADD", "EDIT"],
+    "section": "TAX_INFO",
+    "sectionDisplayName": "Tax Information",
+    "sectionOrder": 3,
+    "displayOrder": 1,
+    "fields": [
+      { "fieldName": "tinNumber", "label": "TIN Number", "dataType": "STRING", "required": true, "accountFieldPath": "tinNumber", "file": false },
+      { "fieldName": "tinCertificate", "label": "TIN Certificate Document", "dataType": "FILE", "required": false, "accountFieldPath": "tinCertificate", "file": true }
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
+  },
+  {
+    "serviceName": "NOMINEE_ADD",
+    "displayName": "Add Nominee",
+    "description": "Add a new nominee to your account",
+    "active": true,
+    "multipart": true,
+    "listBased": true,
+    "targetListField": "nominees",
+    "listIdentifierField": "nid",
+    "allowedActions": ["ADD"],
+    "section": "NOMINEE",
+    "sectionDisplayName": "Nominee Information",
+    "sectionOrder": 4,
+    "displayOrder": 1,
+    "fields": [
+      { "fieldName": "name", "label": "Nominee Name", "dataType": "TEXT", "required": true, "accountFieldPath": "name", "file": false },
+      { "fieldName": "relation", "label": "Relation", "dataType": "TEXT", "required": true, "accountFieldPath": "relation", "file": false },
+      { "fieldName": "nid", "label": "Nominee NID Number", "dataType": "STRING", "required": true, "accountFieldPath": "nid", "file": false },
+      { "fieldName": "percentage", "label": "Percentage Share", "dataType": "NUMBER", "required": true, "accountFieldPath": "percentage", "file": false },
+      { "fieldName": "mobileNumber", "label": "Mobile Number", "dataType": "NUMBER", "required": false, "accountFieldPath": "mobileNumber", "file": false },
+      { "fieldName": "address", "label": "Address", "dataType": "TEXT", "required": false, "accountFieldPath": "address", "file": false },
+      { "fieldName": "city", "label": "City", "dataType": "TEXT", "required": false, "accountFieldPath": "city", "file": false },
+      { "fieldName": "state", "label": "State", "dataType": "TEXT", "required": false, "accountFieldPath": "state", "file": false },
+      { "fieldName": "zipCode", "label": "Zip Code", "dataType": "TEXT", "required": false, "accountFieldPath": "zipCode", "file": false },
+      { "fieldName": "country", "label": "Country", "dataType": "TEXT", "required": false, "accountFieldPath": "country", "file": false },
+      { "fieldName": "residency", "label": "Residency", "dataType": "TEXT", "required": false, "accountFieldPath": "residency", "file": false },
+      { "fieldName": "nomineeNidFront", "label": "Nominee NID Front Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidFront", "file": true },
+      { "fieldName": "nomineeNidBack", "label": "Nominee NID Back Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidBack", "file": true },
+      { "fieldName": "nomineePhoto", "label": "Nominee Passport Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineePhoto", "file": true },
+      { "fieldName": "nomineeSignature", "label": "Nominee Signature", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeSignature", "file": true },
+      { "fieldName": "minor", "label": "Is Minor", "dataType": "BOOLEAN", "required": false, "accountFieldPath": "minor", "file": false },
+      { "fieldName": "guardianName", "label": "Guardian Name", "dataType": "TEXT", "required": false, "accountFieldPath": "guardianName", "file": false },
+      { "fieldName": "relationshipWithNominee", "label": "Relationship with Nominee", "dataType": "TEXT", "required": false, "accountFieldPath": "relationshipWithNominee", "file": false },
+      { "fieldName": "guardianNidNumber", "label": "Guardian NID Number", "dataType": "STRING", "required": false, "accountFieldPath": "guardianNidNumber", "file": false },
+      { "fieldName": "guardianNidFront", "label": "Guardian NID Front", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidFront", "file": true },
+      { "fieldName": "guardianNidBack", "label": "Guardian NID Back", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidBack", "file": true },
+      { "fieldName": "guardianSignature", "label": "Guardian Signature", "dataType": "FILE", "required": false, "accountFieldPath": "guardianSignature", "file": true }
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
+  },
+  {
+    "serviceName": "NOMINEE_EDIT",
+    "displayName": "Edit Nominee",
+    "description": "Edit an existing nominee's details",
+    "active": true,
+    "multipart": true,
+    "listBased": true,
+    "targetListField": "nominees",
+    "listIdentifierField": "nid",
+    "allowedActions": ["EDIT"],
+    "section": "NOMINEE",
+    "sectionDisplayName": "Nominee Information",
+    "sectionOrder": 4,
+    "displayOrder": 2,
+    "fields": [
+      { "fieldName": "name", "label": "Nominee Name", "dataType": "TEXT", "required": true, "accountFieldPath": "name", "file": false },
+      { "fieldName": "relation", "label": "Relation", "dataType": "TEXT", "required": true, "accountFieldPath": "relation", "file": false },
+      { "fieldName": "nid", "label": "Nominee NID Number", "dataType": "STRING", "required": true, "accountFieldPath": "nid", "file": false },
+      { "fieldName": "percentage", "label": "Percentage Share", "dataType": "NUMBER", "required": true, "accountFieldPath": "percentage", "file": false },
+      { "fieldName": "mobileNumber", "label": "Mobile Number", "dataType": "NUMBER", "required": false, "accountFieldPath": "mobileNumber", "file": false },
+      { "fieldName": "address", "label": "Address", "dataType": "TEXT", "required": false, "accountFieldPath": "address", "file": false },
+      { "fieldName": "city", "label": "City", "dataType": "TEXT", "required": false, "accountFieldPath": "city", "file": false },
+      { "fieldName": "state", "label": "State", "dataType": "TEXT", "required": false, "accountFieldPath": "state", "file": false },
+      { "fieldName": "zipCode", "label": "Zip Code", "dataType": "TEXT", "required": false, "accountFieldPath": "zipCode", "file": false },
+      { "fieldName": "country", "label": "Country", "dataType": "TEXT", "required": false, "accountFieldPath": "country", "file": false },
+      { "fieldName": "residency", "label": "Residency", "dataType": "TEXT", "required": false, "accountFieldPath": "residency", "file": false },
+      { "fieldName": "nomineeNidFront", "label": "Nominee NID Front Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidFront", "file": true },
+      { "fieldName": "nomineeNidBack", "label": "Nominee NID Back Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidBack", "file": true },
+      { "fieldName": "nomineePhoto", "label": "Nominee Passport Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineePhoto", "file": true },
+      { "fieldName": "nomineeSignature", "label": "Nominee Signature", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeSignature", "file": true },
+      { "fieldName": "minor", "label": "Is Minor", "dataType": "BOOLEAN", "required": false, "accountFieldPath": "minor", "file": false },
+      { "fieldName": "guardianName", "label": "Guardian Name", "dataType": "TEXT", "required": false, "accountFieldPath": "guardianName", "file": false },
+      { "fieldName": "relationshipWithNominee", "label": "Relationship with Nominee", "dataType": "TEXT", "required": false, "accountFieldPath": "relationshipWithNominee", "file": false },
+      { "fieldName": "guardianNidNumber", "label": "Guardian NID Number", "dataType": "STRING", "required": false, "accountFieldPath": "guardianNidNumber", "file": false },
+      { "fieldName": "guardianNidFront", "label": "Guardian NID Front", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidFront", "file": true },
+      { "fieldName": "guardianNidBack", "label": "Guardian NID Back", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidBack", "file": true },
+      { "fieldName": "guardianSignature", "label": "Guardian Signature", "dataType": "FILE", "required": false, "accountFieldPath": "guardianSignature", "file": true }
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
   }
 ]);
 
-print("Successfully inserted service categories into 'services' collection!");
+print("Successfully seeded ServiceRequestConfig collection with initial service definitions.");

@@ -13,12 +13,18 @@ public class MinioUtil {
     private static String bucketName;
 
     public MinioUtil(MinioClient client,
-                     @Value("${minio.bucket}") String bucket) {
+                     @Value("${minio.bucket:clientportal}") String bucket) {
         MinioUtil.minioClient = client;
         MinioUtil.bucketName = bucket;
     }
 
     public static String getImageUrl(String objectName) {
+        if (objectName == null || objectName.isBlank()) {
+            return null;
+        }
+        if (objectName.startsWith("http://") || objectName.startsWith("https://")) {
+            return objectName;
+        }
         try {
             return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
@@ -29,7 +35,7 @@ public class MinioUtil {
                             .build()
             );
         } catch (Exception e) {
-            throw new RuntimeException("Failed to generate presigned URL", e);
+            return objectName;
         }
     }
 }

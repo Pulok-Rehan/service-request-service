@@ -44,18 +44,12 @@ public class ServiceRequestConfigEntity {
 
     private List<FieldConfigEntity> fields;
 
-    // ---- NEW: grouping for the client menu ----
-
-    /** Stable key for the group this service belongs to, e.g. "PERSONAL_DETAILS" */
     private String section;
 
-    /** Human-readable label for the group, e.g. "Personal Details" */
     private String sectionDisplayName;
 
-    /** Sort order of the section itself relative to other sections (lower first) */
     private Integer sectionOrder;
 
-    /** Sort order of this service within its section (lower first) */
     private Integer displayOrder;
 
     @CreatedDate

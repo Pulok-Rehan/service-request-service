@@ -1,124 +1,121 @@
-//package com.beacepl.service_request_service.controller;
-//
-//import com.beacepl.service_request_service.client.AccountServiceClient;
-//import com.beacepl.service_request_service.entity.ChangeRequestEntity;
-//import com.beacepl.service_request_service.model.*;
-//import com.beacepl.service_request_service.repository.ChangeRequestRepository;
-//import com.beacepl.service_request_service.service.ServiceRequestService;
-//import com.fasterxml.jackson.core.JsonProcessingException;
-//import com.fasterxml.jackson.databind.ObjectMapper;
-//import lombok.RequiredArgsConstructor;
-//import org.springframework.data.crossstore.ChangeSetPersister;
-//import org.springframework.web.bind.annotation.*;
-//
-//import java.time.LocalDateTime;
-//import java.util.HashMap;
-//import java.util.List;
-//import java.util.Map;
-//
-//@RestController
-//@RequestMapping("/admin/service-requests")
-//@RequiredArgsConstructor
-//public class AdminServiceRequestController {
-//
-//    private final ChangeRequestRepository repository;
-//    private final ServiceRequestService service;
-//    private final AccountServiceClient accountServiceClient;
-//    private final ObjectMapper objectMapper;
-//
-//    @GetMapping("/pending")
-//    public ServiceResponse getPendingRequests() throws JsonProcessingException {
-//        List<ChangeRequestEntity> changeRequestEntities = repository.findByStatus("PENDING");
-//        if (changeRequestEntities.isEmpty()) {
-//            return new ServiceResponse(false, "No Service Request found", objectMapper.writeValueAsString(changeRequestEntities), "200");
-//        }
-//        return new ServiceResponse(false, "Service request found", objectMapper.writeValueAsString(changeRequestEntities), "200");
-//    }
-//
-//    @PostMapping("/{id}")
-//    public ServiceResponse approveRequest(@PathVariable String id,
-//                                          @RequestBody AdminActionDto dto) throws ChangeSetPersister.NotFoundException {
-//        ChangeRequestEntity entity = repository.findById(id).orElseThrow(ChangeSetPersister.NotFoundException::new);
-//
-//        if (dto.getStatus() != null && dto.getStatus().equalsIgnoreCase("REJECTED")) {
-//            entity.setStatus("REJECTED");
-//            entity.setAdminRemarks(dto.getRemarks());
-//        } else {
-//            // 1. Aggregate all changes from the list of Request objects
-//            Map<String, Object> allChanges = new HashMap<>();
-//            if (entity.getRequest() != null) {
-//                for (Request request : entity.getRequest()) {
-//                    if (request.getRequestedValue() != null) {
-//                        allChanges.putAll(request.getRequestedValue());
-//                    }
-//                }
-//            }
-//
-//            // 2. Prepare AcceptChangeDto
-//            AcceptChangeDto acceptChangeDto = AcceptChangeDto.builder()
-//                    .mobileNumber(entity.getMobileNumber())
-//                    .accountId(entity.getAccountId())
-//                    .serviceName(entity.getRequestedFor())
-//                    .action(entity.getAction())
-//                    .fieldValues(allChanges)
-//                    .build();
-//
-//            // 3. Apply changes to AccountEntity via RestTemplate client
-//            accountServiceClient.applyChanges(acceptChangeDto);
-//
-//            entity.setStatus("APPROVED");
-//        }
-//
-//        entity.setAdminRemarks(dto.getRemarks());
-//        entity.setCompletedAt(LocalDateTime.now());
-//        repository.save(entity);
-//
-//        return new ServiceResponse(false, "Request status updated successfully", entity, "200");
-//    }
-//
-//    @GetMapping("/pending")
-//    public ServiceResponse getPendingRequests() {
-//        return adminServiceRequestService.getPendingRequests();
-//    }
-//
-//}
-
 package com.beacepl.service_request_service.controller;
 
+import com.beacepl.service_request_service.enums.ServiceRequestStatus;
 import com.beacepl.service_request_service.model.AdminActionDto;
+import com.beacepl.service_request_service.model.AdminServiceRequestResponseDto;
+import com.beacepl.service_request_service.model.ApprovalRequestDto;
+import com.beacepl.service_request_service.model.RejectionRequestDto;
 import com.beacepl.service_request_service.model.ServiceResponse;
-import com.beacepl.service_request_service.service.impl.AdminServiceRequestService;
-import com.fasterxml.jackson.core.JsonProcessingException;
+import com.beacepl.service_request_service.service.impl.AdminServiceRequestServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/admin/service-requests")
+@RequestMapping("/admin/service-request")
 @Slf4j
 @RequiredArgsConstructor
 public class AdminServiceRequestController {
 
-    private final AdminServiceRequestService adminServiceRequestService;
+    private final AdminServiceRequestServiceImpl adminService;
 
-    @GetMapping("/pending")
-    public ServiceResponse getPendingRequests() throws JsonProcessingException {
-        return adminServiceRequestService.getPendingRequests();
-    }
-
-    @GetMapping("/{id}")
-    public ServiceResponse getRequest(@PathVariable String id) {
-        return adminServiceRequestService.getRequestById(id);
+    /**
+     * Admin list API with pagination and filters.
+     * GET /admin/service-request
+     */
+    @GetMapping
+    public ServiceResponse<Page<AdminServiceRequestResponseDto>> listRequests(
+            @RequestParam(required = false) ServiceRequestStatus status,
+            @RequestParam(required = false) String serviceName,
+            @RequestParam(required = false) String investorCode,
+            @RequestParam(required = false) String accountId,
+            @RequestParam(required = false) String mobileNumber,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        log.info("Admin list service requests query: status={}, serviceName={}, page={}, size={}", status, serviceName, page, size);
+        return adminService.listAdminRequests(status, serviceName, investorCode, accountId, mobileNumber, page, size);
     }
 
     /**
-     * Approve or reject a pending request. On approval, this triggers a
-     * call to dbp-onboarding-service to apply the change to AccountEntity.
-     * Body: { "status": "APPROVED" | "REJECTED", "remarks": "...", "reviewedBy": "admin@bracepl.com" }
+     * Admin view request detail with presigned file URLs.
+     * GET /admin/service-request/{id}
+     */
+    @GetMapping("/{id}")
+    public ServiceResponse<AdminServiceRequestResponseDto> getRequestDetail(@PathVariable String id) {
+        log.info("Admin fetching detail for service request ID: {}", id);
+        return adminService.getRequestDetail(id);
+    }
+
+    /**
+     * Admin approve request API.
+     * POST /admin/service-request/{id}/approve or PUT /admin/service-request/{id}/approve
+     */
+    @PostMapping("/{id}/approve")
+    public ServiceResponse<AdminServiceRequestResponseDto> approveRequest(
+            @PathVariable String id,
+            @RequestBody(required = false) ApprovalRequestDto dto
+    ) {
+        log.info("Admin approving service request ID: {}", id);
+        return adminService.approveRequest(id, dto);
+    }
+
+    @PutMapping("/{id}/approve")
+    public ServiceResponse<AdminServiceRequestResponseDto> approveRequestPut(
+            @PathVariable String id,
+            @RequestBody(required = false) ApprovalRequestDto dto
+    ) {
+        return approveRequest(id, dto);
+    }
+
+    /**
+     * Admin reject request API.
+     * POST /admin/service-request/{id}/reject or PUT /admin/service-request/{id}/reject
+     */
+    @PostMapping("/{id}/reject")
+    public ServiceResponse<AdminServiceRequestResponseDto> rejectRequest(
+            @PathVariable String id,
+            @RequestBody(required = false) RejectionRequestDto dto
+    ) {
+        log.info("Admin rejecting service request ID: {}", id);
+        return adminService.rejectRequest(id, dto);
+    }
+
+    @PutMapping("/{id}/reject")
+    public ServiceResponse<AdminServiceRequestResponseDto> rejectRequestPut(
+            @PathVariable String id,
+            @RequestBody(required = false) RejectionRequestDto dto
+    ) {
+        return rejectRequest(id, dto);
+    }
+
+    /**
+     * Compatibility action endpoint.
+     * POST /admin/service-request/{id}/action
      */
     @PostMapping("/{id}/action")
-    public ServiceResponse actOnRequest(@PathVariable String id, @RequestBody AdminActionDto dto) {
-        log.info("Admin action on request {}: {}", id, dto.getStatus());
-        return adminServiceRequestService.actOnRequest(id, dto);
+    public ServiceResponse<AdminServiceRequestResponseDto> actOnRequest(
+            @PathVariable String id,
+            @RequestBody AdminActionDto dto
+    ) {
+        if (dto != null && "REJECTED".equalsIgnoreCase(dto.getStatus())) {
+            return adminService.rejectRequest(id, RejectionRequestDto.builder()
+                    .reviewedBy(dto.getAdminId())
+                    .remark(dto.getRemarks())
+                    .build());
+        } else {
+            return adminService.approveRequest(id, ApprovalRequestDto.builder()
+                    .reviewedBy(dto != null ? dto.getAdminId() : "ADMIN")
+                    .adminRemark(dto != null ? dto.getRemarks() : "Approved")
+                    .build());
+        }
     }
 }
