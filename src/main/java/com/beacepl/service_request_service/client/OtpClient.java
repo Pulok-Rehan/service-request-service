@@ -17,8 +17,8 @@ public class OtpClient {
     private String sendOtp;
     @Value("${client.otp.validateOtp}")
     private String validateOtp;
-    @Value("${client.otp.sendTemporaryPassword}")
-    private String sendTemporaryPassword;
+//    @Value("${client.otp.sendTemporaryPassword}")
+//    private String sendTemporaryPassword;
 
     private final RestTemplate restTemplate;
 
@@ -85,7 +85,7 @@ public class OtpClient {
                 new HttpEntity<>(params, headers);
 
         Boolean response = restTemplate.postForObject(
-                url+sendTemporaryPassword,
+                url+"sendTemporaryPassword",
                 request,
                 Boolean.class
         );

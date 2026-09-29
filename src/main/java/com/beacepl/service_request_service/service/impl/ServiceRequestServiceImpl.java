@@ -1,7 +1,9 @@
 package com.beacepl.service_request_service.service.impl;
 
 import com.beacepl.service_request_service.client.OnboardingServiceClient;
+import com.beacepl.service_request_service.client.OtpClient;
 import com.beacepl.service_request_service.entity.FieldConfigEntity;
+import com.beacepl.service_request_service.entity.OtpVerification;
 import com.beacepl.service_request_service.entity.ServiceRequestAuditEntity;
 import com.beacepl.service_request_service.entity.ServiceRequestConfigEntity;
 import com.beacepl.service_request_service.entity.ServiceRequestEntity;
@@ -9,10 +11,14 @@ import com.beacepl.service_request_service.enums.ServiceRequestStatus;
 import com.beacepl.service_request_service.exceptions.ConfigurationNotFoundException;
 import com.beacepl.service_request_service.exceptions.DuplicateRequestException;
 import com.beacepl.service_request_service.exceptions.InvalidRequestException;
+import com.beacepl.service_request_service.exceptions.OtpNotFoundException;
+import com.beacepl.service_request_service.exceptions.OtpNotMatchException;
 import com.beacepl.service_request_service.exceptions.RequestNotFoundException;
 import com.beacepl.service_request_service.model.AccountSnapshot;
+import com.beacepl.service_request_service.model.FieldChangeDetail;
 import com.beacepl.service_request_service.model.ServiceRequestSubmitDto;
 import com.beacepl.service_request_service.model.ServiceResponse;
+import com.beacepl.service_request_service.repository.OtpRepository;
 import com.beacepl.service_request_service.repository.ServiceRequestAuditRepository;
 import com.beacepl.service_request_service.repository.ServiceRequestConfigRepository;
 import com.beacepl.service_request_service.repository.ServiceRequestRepository;
@@ -44,6 +50,8 @@ public class ServiceRequestServiceImpl {
     private final FieldValidationService validationService;
     private final MinioService minioService;
     private final List<ServiceRequestHandler> requestHandlers;
+    private final OtpRepository otpRepository;
+    private final OtpClient otpClient;
 
     public ServiceResponse<ServiceRequestEntity> submitServiceRequest(
             ServiceRequestSubmitDto submitDto,
@@ -72,7 +80,48 @@ public class ServiceRequestServiceImpl {
         String mobileNumber = (account.getMobileNumber() != null) ? account.getMobileNumber() : submitDto.getMobileNumber();
         String email = (account.getEmailAddress() != null) ? account.getEmailAddress() : submitDto.getEmail();
 
-        // 3. Duplicate Pending Request Protection (Requirement 37)
+        // 3. OTP Verification Flow
+        if (submitDto.getOtp() == null || submitDto.getOtp().trim().isEmpty()) {
+            String otpValue = String.format("%06d", new java.security.SecureRandom().nextInt(999999));
+            log.info("Generated OTP value: {} for mobile: {}, email: {}", otpValue, mobileNumber, email);
+
+            OtpVerification otpVerification = OtpVerification.builder()
+                    .identifier(mobileNumber != null ? mobileNumber : email)
+                    .otp(otpValue)
+                    .processName(serviceName)
+                    .createdAt(new java.util.Date())
+                    .build();
+            otpRepository.save(otpVerification);
+
+            try {
+                otpClient.sendOtp(mobileNumber, email, otpValue);
+            } catch (Exception e) {
+                log.warn("Failed to send OTP via OtpClient: {}", e.getMessage());
+            }
+
+            throw new OtpNotFoundException("OTP is required and has been sent to mobile/email");
+        }
+
+        boolean isOtpValid = false;
+            List<OtpVerification> historicalOtps = otpRepository.findByIdentifierAndProcessNameOrderByCreatedAtDesc(
+                    mobileNumber != null ? mobileNumber : email, serviceName
+            );
+            if (!historicalOtps.isEmpty() && submitDto.getOtp().equals(historicalOtps.get(0).getOtp())) {
+                isOtpValid = true;
+            } else {
+                try {
+                    isOtpValid = otpClient.validateOtp(mobileNumber, email, submitDto.getOtp());
+                } catch (Exception e) {
+                    log.warn("OtpClient validation call error: {}", e.getMessage());
+                }
+            }
+
+        if (!isOtpValid) {
+            log.warn("OTP validation failed for identifier: {}", mobileNumber);
+            throw new OtpNotMatchException("OTP validation failed");
+        }
+
+        // 4. Duplicate Pending Request Protection (Requirement 37)
         if (!"NOMINEE_ADD".equalsIgnoreCase(serviceName)) {
             boolean duplicateExists = requestRepository.existsByAccountIdAndServiceNameAndStatus(
                     accountId, serviceName, ServiceRequestStatus.PENDING
@@ -82,18 +131,18 @@ public class ServiceRequestServiceImpl {
             }
         }
 
-        // 4. Validate Action
+        // 5. Validate Action
         String action = (submitDto.getAction() != null && !submitDto.getAction().isBlank())
                 ? submitDto.getAction().toUpperCase()
                 : (config.getAllowedActions() != null && !config.getAllowedActions().isEmpty() ? config.getAllowedActions().get(0) : "EDIT");
 
-        // 5. Dynamic Field Validation
+        // 6. Dynamic Field Validation
         Map<String, Object> submittedFields = submitDto.getFieldValues() != null ? submitDto.getFieldValues() : new HashMap<>();
         validationService.validateServiceAndFields(
                 config, action, submitDto.getListItemIdentifierValue(), submittedFields, uploadedFiles
         );
 
-        // 6. Handle File Uploads to MinIO
+        // 7. Handle File Uploads to MinIO
         String generateId = "SR-" + UUID.randomUUID().toString().substring(0, 8);
         Map<String, String> uploadedFileNames = new HashMap<>();
 
@@ -111,7 +160,7 @@ public class ServiceRequestServiceImpl {
             }
         }
 
-        // 7. Resolve Strategy Handler for Old / New Values
+        // 8. Resolve Strategy Handler for Old / New Values
         ServiceRequestHandler handler = requestHandlers.stream()
                 .filter(h -> h.supports(config))
                 .findFirst()
@@ -123,11 +172,11 @@ public class ServiceRequestServiceImpl {
         Map<String, Object> newValues = handler.resolveNewValues(
                 submittedFields, uploadedFileNames, config
         );
-        List<com.beacepl.service_request_service.model.FieldChangeDetail> fieldDetails = handler.buildFieldDetails(
+        List<FieldChangeDetail> fieldDetails = handler.buildFieldDetails(
                 oldValues, newValues, config
         );
 
-        // 8. Build & Save Service Request Entity
+        // 9. Build & Save Service Request Entity
         ServiceRequestEntity entity = ServiceRequestEntity.builder()
                 .id(generateId)
                 .accountId(accountId)
@@ -150,7 +199,7 @@ public class ServiceRequestServiceImpl {
         ServiceRequestEntity savedEntity = requestRepository.save(entity);
         log.info("Service request created successfully with ID: {} for account: {}", savedEntity.getId(), accountId);
 
-        // 9. Save Audit Information
+        // 10. Save Audit Information
         auditRepository.save(ServiceRequestAuditEntity.builder()
                 .requestId(savedEntity.getId())
                 .serviceName(serviceName)

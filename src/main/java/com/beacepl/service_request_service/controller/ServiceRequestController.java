@@ -1,7 +1,10 @@
 package com.beacepl.service_request_service.controller;
 
+import com.beacepl.service_request_service.ResponseMessageUtil;
 import com.beacepl.service_request_service.entity.ServiceRequestEntity;
 import com.beacepl.service_request_service.enums.ServiceRequestStatus;
+import com.beacepl.service_request_service.exceptions.OtpNotFoundException;
+import com.beacepl.service_request_service.exceptions.OtpNotMatchException;
 import com.beacepl.service_request_service.model.ServiceRequestSubmitDto;
 import com.beacepl.service_request_service.model.ServiceResponse;
 import com.beacepl.service_request_service.service.impl.ServiceRequestServiceImpl;
@@ -38,11 +41,17 @@ public class ServiceRequestController {
      * POST /service-request/submit
      */
     @PostMapping(value = "/submit", consumes = MediaType.APPLICATION_JSON_VALUE)
-    public ServiceResponse<ServiceRequestEntity> submitJson(
+    public ServiceResponse submitJson(
             @RequestBody ServiceRequestSubmitDto requestDto
     ) throws Exception {
-        log.info("Received JSON service request submission for service: {}", requestDto.getServiceName());
-        return serviceRequestService.submitServiceRequest(requestDto, null);
+        try {
+            log.info("Received JSON service request submission for service: {}", requestDto.getServiceName());
+            return serviceRequestService.submitServiceRequest(requestDto, null);
+        } catch (OtpNotFoundException e) {
+            return ResponseMessageUtil.otpRequiredResponse(requestDto.getMobileNumber(), requestDto.getEmailAddress());
+        } catch (OtpNotMatchException e) {
+            return new ServiceResponse("OTP did not match", "428");
+        }
     }
 
     /**
@@ -50,7 +59,7 @@ public class ServiceRequestController {
      * POST /service-request/submit
      */
     @PostMapping(value = "/submit", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ServiceResponse<ServiceRequestEntity> submitMultipart(
+    public ServiceResponse submitMultipart(
             @RequestPart(value = "requestData", required = false) String requestDataJson,
             MultipartHttpServletRequest multipartRequest
     ) throws Exception {
@@ -66,6 +75,7 @@ public class ServiceRequestController {
                     .mobileNumber(multipartRequest.getParameter("mobileNumber"))
                     .investorCode(multipartRequest.getParameter("investorCode"))
                     .email(multipartRequest.getParameter("email"))
+                    .otp(multipartRequest.getParameter("otp"))
                     .action(multipartRequest.getParameter("action"))
                     .listItemIdentifierValue(multipartRequest.getParameter("listItemIdentifierValue"))
                     .fields(extractFieldsFromParams(multipartRequest.getParameterMap()))
@@ -78,7 +88,16 @@ public class ServiceRequestController {
         log.info("Received Multipart service request submission for service: {}, uploaded files count: {}",
                 dto.getServiceName(), uploadedFiles.size());
 
-        return serviceRequestService.submitServiceRequest(dto, uploadedFiles);
+        try {
+            return serviceRequestService.submitServiceRequest(dto, uploadedFiles);
+        } catch (OtpNotFoundException e) {
+            ServiceRequestSubmitDto requestSubmitDto = (requestDataJson != null && !requestDataJson.isBlank())
+                    ? objectMapper.readValue(requestDataJson, ServiceRequestSubmitDto.class)
+                    : dto;
+            return ResponseMessageUtil.otpRequiredResponse(requestSubmitDto.getMobileNumber(), requestSubmitDto.getEmailAddress());
+        } catch (OtpNotMatchException e) {
+            return new ServiceResponse("OTP did not match", "428");
+        }
     }
 
     /**
@@ -132,6 +151,7 @@ public class ServiceRequestController {
                 "mobileNumber".equalsIgnoreCase(paramName) ||
                 "investorCode".equalsIgnoreCase(paramName) ||
                 "email".equalsIgnoreCase(paramName) ||
+                "otp".equalsIgnoreCase(paramName) ||
                 "action".equalsIgnoreCase(paramName) ||
                 "listItemIdentifierValue".equalsIgnoreCase(paramName);
     }
