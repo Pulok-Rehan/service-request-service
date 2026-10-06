@@ -19,6 +19,7 @@ public class ServiceRequestSubmitDto {
     private String serviceName;
 
     private String accountId;
+    private String platformId;
 
     private String mobileNumber;
 

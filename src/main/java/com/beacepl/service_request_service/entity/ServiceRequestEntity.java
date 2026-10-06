@@ -34,6 +34,8 @@ public class ServiceRequestEntity {
 
     @Indexed
     private String accountId;
+    @Indexed
+    private String platformid;
 
     @Indexed
     private String mobileNumber;

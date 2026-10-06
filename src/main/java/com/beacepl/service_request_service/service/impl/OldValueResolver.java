@@ -73,35 +73,45 @@ public class OldValueResolver {
             return null;
         }
 
-        // For ADD action, oldValues is null/empty
-        if (listItemIdentifierValue == null || listItemIdentifierValue.isBlank()) {
-            return null;
-        }
-
         String targetListField = config.getTargetListField(); // e.g. "nominees"
         String identifierField = config.getListIdentifierField(); // e.g. "nid"
 
-        if ("nominees".equalsIgnoreCase(targetListField) && account.getNominees() != null) {
-            for (NomineeEntity nominee : account.getNominees()) {
-                String nomineeIdentifier = getNomineeIdentifierValue(nominee, identifierField);
-                if (Objects.equals(nomineeIdentifier, listItemIdentifierValue)) {
-                    Map<String, Object> nomineeMap = objectMapper.convertValue(nominee, new TypeReference<Map<String, Object>>() {});
-                    Map<String, Object> oldValues = new HashMap<>();
-                    for (FieldConfigEntity fieldConfig : config.getFields()) {
-                        String path = fieldConfig.getAccountFieldPath();
-                        if (path == null || path.isBlank()) {
-                            path = fieldConfig.getFieldName();
-                        }
-                        // Handle leaf path inside nominee
-                        String leafPath = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
-                        Object val = nomineeMap.get(leafPath);
-                        if (val == null) {
-                            val = nomineeMap.get(fieldConfig.getFieldName());
-                        }
-                        oldValues.put(leafPath, val);
+        if ("nominees".equalsIgnoreCase(targetListField) && account.getNominees() != null && !account.getNominees().isEmpty()) {
+            NomineeEntity targetNominee = null;
+
+            if (listItemIdentifierValue != null && !listItemIdentifierValue.isBlank()) {
+                for (NomineeEntity nominee : account.getNominees()) {
+                    String nomineeIdentifier = getNomineeIdentifierValue(nominee, identifierField);
+                    if (Objects.equals(nomineeIdentifier, listItemIdentifierValue)
+                            || Objects.equals(nominee.getNid(), listItemIdentifierValue)
+                            || Objects.equals(nominee.getId(), listItemIdentifierValue)
+                            || Objects.equals(nominee.getName(), listItemIdentifierValue)) {
+                        targetNominee = nominee;
+                        break;
                     }
-                    return oldValues;
                 }
+            } else {
+                // If listItemIdentifierValue is not provided, default to the first nominee
+                targetNominee = account.getNominees().get(0);
+            }
+
+            if (targetNominee != null) {
+                Map<String, Object> nomineeMap = objectMapper.convertValue(targetNominee, new TypeReference<Map<String, Object>>() {});
+                Map<String, Object> oldValues = new HashMap<>();
+                for (FieldConfigEntity fieldConfig : config.getFields()) {
+                    String path = fieldConfig.getAccountFieldPath();
+                    if (path == null || path.isBlank()) {
+                        path = fieldConfig.getFieldName();
+                    }
+                    String leafPath = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+                    Object val = nomineeMap.get(leafPath);
+                    if (val == null) {
+                        val = nomineeMap.get(fieldConfig.getFieldName());
+                    }
+                    oldValues.put(fieldConfig.getFieldName(), val);
+                    oldValues.put(leafPath, val);
+                }
+                return oldValues;
             }
         }
 

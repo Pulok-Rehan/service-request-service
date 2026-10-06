@@ -11,5 +11,5 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class RejectionRequestDto {
     private String reviewedBy;
-    private String remark;
+    private String adminRemark;
 }

@@ -4,11 +4,11 @@ import com.beacepl.service_request_service.exceptions.AccountNotFoundException;
 import com.beacepl.service_request_service.exceptions.ServiceRequestException;
 import com.beacepl.service_request_service.model.AccountSnapshot;
 import com.beacepl.service_request_service.model.ApplyServiceRequestDto;
-import com.beacepl.service_request_service.model.ServiceResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -25,6 +25,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class OnboardingServiceClient {
 
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${onboarding.service.url:http://localhost:9092}")
     private String baseUrl;
@@ -32,29 +33,26 @@ public class OnboardingServiceClient {
     public AccountSnapshot getAccountById(String accountId) {
         String url = UriComponentsBuilder
                 .fromHttpUrl(baseUrl)
-                .path("/onboarding/account/")
-                .path(accountId)
+                .path("/onboarding/api/search-information")
+                .queryParam("input", accountId)
                 .toUriString();
 
         try {
-            log.info("Fetching account info from Onboarding Service by ID: {}", accountId);
-            ResponseEntity<ServiceResponse<AccountSnapshot>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<ServiceResponse<AccountSnapshot>>() {}
-            );
+            log.info("Fetching account info from Onboarding Service by ID/input: {}", accountId);
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
 
-            if (response.getBody() != null && !response.getBody().isHasError() && response.getBody().getContent() != null) {
-                return response.getBody().getContent();
+            if (response.getBody() == null || response.getBody().isBlank()) {
+                throw new AccountNotFoundException("Account not found in Onboarding Service with ID: " + accountId);
             }
-            // Fallback to direct object if Onboarding Service returns raw AccountSnapshot
-            return fetchDirectAccount(url);
+
+            return extractAccountSnapshotFromRawResponse(response.getBody(), accountId);
 
         } catch (HttpClientErrorException.NotFound e) {
             throw new AccountNotFoundException("Account not found in Onboarding Service with ID: " + accountId);
+        } catch (AccountNotFoundException e) {
+            throw e;
         } catch (Exception e) {
-            log.warn("Failed to fetch account via /onboarding/account/{}, trying search fallback. Error: {}", accountId, e.getMessage());
+            log.warn("Failed to fetch account via /onboarding/api/search-information, trying search fallback. Error: {}", e.getMessage());
             return searchAccount(accountId);
         }
     }
@@ -69,13 +67,15 @@ public class OnboardingServiceClient {
 
         try {
             log.info("Searching account in Onboarding Service with identifier: {}", identifier);
-            ResponseEntity<AccountSnapshot> response = restTemplate.getForEntity(url, AccountSnapshot.class);
-            if (response.getBody() != null) {
-                return response.getBody();
+            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            if (response.getBody() != null && !response.getBody().isBlank()) {
+                return extractAccountSnapshotFromRawResponse(response.getBody(), identifier);
             }
             throw new AccountNotFoundException("Account not found with identifier: " + identifier);
         } catch (HttpClientErrorException.NotFound e) {
             throw new AccountNotFoundException("Account not found with identifier: " + identifier);
+        } catch (AccountNotFoundException e) {
+            throw e;
         } catch (Exception e) {
             log.error("Error communicating with Onboarding Service during search: {}", e.getMessage(), e);
             throw new ServiceRequestException("Failed to communicate with Onboarding Service: " + e.getMessage(), e);
@@ -104,11 +104,26 @@ public class OnboardingServiceClient {
         }
     }
 
-    private AccountSnapshot fetchDirectAccount(String url) {
-        ResponseEntity<AccountSnapshot> response = restTemplate.getForEntity(url, AccountSnapshot.class);
-        if (response.getBody() != null) {
-            return response.getBody();
+    private AccountSnapshot extractAccountSnapshotFromRawResponse(String rawBody, String identifier) throws Exception {
+        JsonNode rootNode = objectMapper.readTree(rawBody);
+
+        // Check if response is wrapped in ServiceResponse { "hasError": false, "content": ... }
+        if (rootNode.has("content") && !rootNode.get("content").isNull()) {
+            JsonNode contentNode = rootNode.get("content");
+            if (contentNode.isTextual()) {
+                // content is a serialized JSON string e.g. "{\"id\":\"...\"}"
+                return objectMapper.readValue(contentNode.asText(), AccountSnapshot.class);
+            } else if (contentNode.isObject()) {
+                // content is a JSON object
+                return objectMapper.treeToValue(contentNode, AccountSnapshot.class);
+            }
         }
-        throw new AccountNotFoundException("Account details not returned from Onboarding Service");
+
+        // If root is directly the AccountSnapshot JSON object
+        if (rootNode.isObject()) {
+            return objectMapper.treeToValue(rootNode, AccountSnapshot.class);
+        }
+
+        throw new AccountNotFoundException("Unable to parse account details for: " + identifier);
     }
 }

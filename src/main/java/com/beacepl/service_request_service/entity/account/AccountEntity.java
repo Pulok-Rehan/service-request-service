@@ -1,20 +1,25 @@
-package com.beacepl.service_request_service.model;
-
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+package com.beacepl.service_request_service.entity.account;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
+//@Entity
 @Data
-@Builder
 @AllArgsConstructor
 @NoArgsConstructor
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class AccountSnapshot {
+@Builder
+@Document(collection = "AccountDetails")
+public class AccountEntity {
+    @Id
     private String id;
     private String investorCode;
     private String platformId;
@@ -47,13 +52,14 @@ public class AccountSnapshot {
     private String chequeLeaf;
     private String tinCertificate;
     private String tinNumber;
-    private Object jointAccountEntity;
+    private JointAccountEntity jointAccountEntity;
+    @DBRef
     private List<NomineeEntity> nominees;
-    private Object completionSection;
+    private CompletionSectionEntity completionSection;
     private List<String> powerOfAttorneyForAccounts;
     private List<String> powerOfAttorneyByAccounts;
-    private String accountStatus;
-    private String internalStatus;
+    private AccountStatus accountStatus;
+    private InternalStatus internalStatus;
     private boolean enableDividendCredit;
     private boolean applyForTaxExemption;
     private String sourceOfFund;
@@ -66,6 +72,9 @@ public class AccountSnapshot {
     private double paymentAmount;
     private String transactionId;
     private String transactionMode;
+    @CreatedDate
     private LocalDateTime createdAt;
+    @LastModifiedDate
     private LocalDateTime updatedAt;
+
 }

@@ -6,8 +6,9 @@ import com.beacepl.service_request_service.model.ApprovalRequestDto;
 import com.beacepl.service_request_service.model.RejectionRequestDto;
 import com.beacepl.service_request_service.model.ServiceResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -15,7 +16,7 @@ public class AdminServiceRequestService {
 
     private final AdminServiceRequestServiceImpl adminService;
 
-    public ServiceResponse<Page<AdminServiceRequestResponseDto>> getPendingRequests() {
+    public ServiceResponse<List<AdminServiceRequestResponseDto>> getPendingRequests() {
         return adminService.listAdminRequests(null, null, null, null, null, 0, 20);
     }
 
@@ -27,7 +28,7 @@ public class AdminServiceRequestService {
         if (dto != null && "REJECTED".equalsIgnoreCase(dto.getStatus())) {
             return adminService.rejectRequest(id, RejectionRequestDto.builder()
                     .reviewedBy(dto.getAdminId())
-                    .remark(dto.getRemarks())
+                    .adminRemark(dto.getRemarks())
                     .build());
         }
         return adminService.approveRequest(id, ApprovalRequestDto.builder()

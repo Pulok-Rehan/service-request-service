@@ -28,7 +28,7 @@ public class ServiceRequestConfigController {
      * Frontend API to retrieve available service request configurations, grouped by section/category.
      * GET /service-request/config
      */
-    @GetMapping("/service-request/config")
+    @GetMapping("/service-request/service-request-list")
     public ServiceResponse<List<ServiceSectionDto>> getAvailableConfigurationsGrouped() {
         log.info("Received request for active service configurations grouped by section");
         return configService.getActiveConfigurationsGrouped();

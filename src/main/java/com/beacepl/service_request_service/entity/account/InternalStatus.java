@@ -1,0 +1,5 @@
+package com.beacepl.service_request_service.entity.account;
+
+public enum InternalStatus {
+    PARTIAL, EDIT_REQUIRED, EDITED, WAITING_FOR_VALIDATION, VALIDATED, SETTLEMENT_ACCEPTED, ACCEPTED, INITIATED, PEP_APPROVED, PEP_FLAGGED, REFUNDED, REJECTED, ACTIVE
+}

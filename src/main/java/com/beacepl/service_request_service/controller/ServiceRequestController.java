@@ -5,6 +5,7 @@ import com.beacepl.service_request_service.entity.ServiceRequestEntity;
 import com.beacepl.service_request_service.enums.ServiceRequestStatus;
 import com.beacepl.service_request_service.exceptions.OtpNotFoundException;
 import com.beacepl.service_request_service.exceptions.OtpNotMatchException;
+import com.beacepl.service_request_service.model.ServiceConfigAndOldValuesResponseDto;
 import com.beacepl.service_request_service.model.ServiceRequestSubmitDto;
 import com.beacepl.service_request_service.model.ServiceResponse;
 import com.beacepl.service_request_service.service.impl.ServiceRequestServiceImpl;
@@ -77,6 +78,7 @@ public class ServiceRequestController {
                     .email(multipartRequest.getParameter("email"))
                     .otp(multipartRequest.getParameter("otp"))
                     .action(multipartRequest.getParameter("action"))
+                    .platformId(multipartRequest.getParameter("platformId"))
                     .listItemIdentifierValue(multipartRequest.getParameter("listItemIdentifierValue"))
                     .fields(extractFieldsFromParams(multipartRequest.getParameterMap()))
                     .build();
@@ -128,6 +130,20 @@ public class ServiceRequestController {
     @GetMapping("/{id}")
     public ServiceResponse<ServiceRequestEntity> getRequestById(@PathVariable String id) {
         return serviceRequestService.getRequestById(id);
+    }
+
+    /**
+     * Get service configuration along with current old values from AccountEntity for a specific service.
+     * GET /service-request/initial-data or GET /service-request/config-values
+     */
+    @GetMapping({"/initial-data"})
+    public ServiceResponse<ServiceConfigAndOldValuesResponseDto> getInitialData(
+            @RequestParam String investorCode,
+            @RequestParam String serviceName,
+            @RequestParam(required = false) String listItemIdentifierValue
+    ) {
+        log.info("Fetching service config and old values for investorCode: {}, serviceName: {}", investorCode, serviceName);
+        return serviceRequestService.getServiceConfigWithOldValues(investorCode, serviceName, listItemIdentifierValue);
     }
 
     private Map<String, Object> extractFieldsFromParams(Map<String, String[]> paramMap) {

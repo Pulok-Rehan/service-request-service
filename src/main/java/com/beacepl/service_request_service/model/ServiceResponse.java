@@ -1,41 +1,45 @@
 package com.beacepl.service_request_service.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ServiceResponse<T> {
+
     private boolean hasError;
     private String message;
     private T content;
     private String statusCode;
 
-    public ServiceResponse(boolean hasError, String message, T content) {
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
+    public ServiceResponse(boolean hasError, String message, T content, String statusCode) {
         this.hasError = hasError;
         this.message = message;
-        this.content = content;
-        this.statusCode = hasError ? "400" : "200";
+        this.content = hasError ? content : serializeContent(content);
+        this.statusCode = statusCode;
     }
 
     public ServiceResponse(String message, String statusCode) {
-        this.hasError = true;
-        this.message = message;
-        this.content = null;
-        this.statusCode = statusCode;
+        this(true, message, null, statusCode);
     }
 
     public ServiceResponse(String message, T content, String statusCode) {
-        this.hasError = false;
-        this.message = message;
-        this.content = content;
-        this.statusCode = statusCode;
+        this(false, message, content, statusCode);
+    }
+
+    public ServiceResponse(boolean hasError, String message, T content) {
+        this(hasError, message, content, hasError ? "400" : "200");
     }
 
     public static <T> ServiceResponse<T> success(String message, T content) {
@@ -43,7 +47,7 @@ public class ServiceResponse<T> {
     }
 
     public static <T> ServiceResponse<T> success(T content) {
-        return new ServiceResponse<>(false, "Success", content, "200");
+        return new ServiceResponse<>(false, "Data fetched successfully", content, "200");
     }
 
     public static <T> ServiceResponse<T> error(String message) {
@@ -52,5 +56,20 @@ public class ServiceResponse<T> {
 
     public static <T> ServiceResponse<T> error(String message, String statusCode) {
         return new ServiceResponse<>(true, message, null, statusCode);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T serializeContent(Object content) {
+        if (content == null) {
+            return null;
+        }
+        if (content instanceof String) {
+            return (T) content;
+        }
+        try {
+            return (T) MAPPER.writeValueAsString(content);
+        } catch (Exception e) {
+            return (T) content.toString();
+        }
     }
 }
