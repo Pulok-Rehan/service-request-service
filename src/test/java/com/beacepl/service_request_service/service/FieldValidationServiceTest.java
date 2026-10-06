@@ -13,7 +13,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FieldValidationServiceTest {
 
@@ -37,7 +38,6 @@ class FieldValidationServiceTest {
                                 .label("New Mobile Number")
                                 .dataType(FieldDataType.NUMBER)
                                 .required(true)
-                                .validationRegex("^01[3-9]\\d{8}$")
                                 .build()
                 ))
                 .build();
@@ -48,8 +48,8 @@ class FieldValidationServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw InvalidRequestException for invalid mobile number format")
-    void testInvalidMobileFormat() {
+    @DisplayName("Should throw InvalidRequestException for invalid number data type")
+    void testInvalidNumberDataType() {
         ServiceRequestConfigEntity config = ServiceRequestConfigEntity.builder()
                 .serviceName("MOBILE_CHANGE")
                 .active(true)
@@ -60,12 +60,11 @@ class FieldValidationServiceTest {
                                 .label("New Mobile Number")
                                 .dataType(FieldDataType.NUMBER)
                                 .required(true)
-                                .validationRegex("^01[3-9]\\d{8}$")
                                 .build()
                 ))
                 .build();
 
-        Map<String, Object> fields = Map.of("newMobileNumber", "12345");
+        Map<String, Object> fields = Map.of("newMobileNumber", "not_a_valid_number");
 
         assertThrows(InvalidRequestException.class, () ->
                 validationService.validateServiceAndFields(config, "EDIT", null, fields, null)

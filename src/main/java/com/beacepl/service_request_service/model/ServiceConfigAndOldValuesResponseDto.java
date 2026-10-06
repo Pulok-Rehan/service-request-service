@@ -36,7 +36,6 @@ public class ServiceConfigAndOldValuesResponseDto {
         private FieldDataType dataType;
         private String valueType;
         private boolean required;
-        private String validationRegex;
         private Integer minLength;
         private Integer maxLength;
         private String accountFieldPath;

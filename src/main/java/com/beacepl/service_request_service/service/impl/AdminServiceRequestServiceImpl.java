@@ -18,6 +18,7 @@ import com.beacepl.service_request_service.repository.ServiceRequestAuditReposit
 import com.beacepl.service_request_service.repository.ServiceRequestConfigRepository;
 import com.beacepl.service_request_service.repository.ServiceRequestRepository;
 import com.beacepl.service_request_service.MinioUtil;
+import com.beacepl.service_request_service.entity.ApprovalHistoryItem;
 import com.beacepl.service_request_service.service.AccountSnapshotService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +49,7 @@ public class AdminServiceRequestServiceImpl {
     private final OldValueResolver oldValueResolver;
     private final AccountSnapshotService accountSnapshotService;
     private final ServiceRequestNotificationUtil serviceRequestNotificationUtil;
+    private final DownstreamApiDispatcherService downstreamApiDispatcherService;
 
     public ServiceResponse<List<AdminServiceRequestResponseDto>> listAdminRequests(
             ServiceRequestStatus status,
@@ -95,6 +98,72 @@ public class AdminServiceRequestServiceImpl {
             throw new InvalidRequestException("Cannot approve request. Current status is " + entity.getStatus());
         }
 
+        ServiceRequestConfigEntity config = configRepository.findByServiceName(entity.getServiceName()).orElse(null);
+
+        int currentLevel = entity.getCurrentLevel() != null ? entity.getCurrentLevel() : 1;
+        int totalLevels = entity.getTotalLevels() != null ? entity.getTotalLevels() : 1;
+
+        // Resolve level name from config if configured
+        String levelName = "Level " + currentLevel;
+        if (config != null && config.getApprovalLevels() != null && !config.getApprovalLevels().isEmpty()) {
+            for (var lvl : config.getApprovalLevels()) {
+                if (lvl.getLevel() != null && lvl.getLevel() == currentLevel && lvl.getLevelName() != null) {
+                    levelName = lvl.getLevelName();
+                    break;
+                }
+            }
+        }
+
+        String approver = (approvalDto != null && approvalDto.getReviewedBy() != null) ? approvalDto.getReviewedBy() : "ADMIN";
+        String approverRole = (approvalDto != null && approvalDto.getRole() != null) ? approvalDto.getRole() : "ADMIN";
+        String remark = (approvalDto != null && approvalDto.getAdminRemark() != null) ? approvalDto.getAdminRemark() : "Approved";
+
+        // Record level approval in history
+        ApprovalHistoryItem historyItem = ApprovalHistoryItem.builder()
+                .level(currentLevel)
+                .levelName(levelName)
+                .action("APPROVED")
+                .actionBy(approver)
+                .role(approverRole)
+                .remark(remark)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        if (entity.getApprovalHistory() == null) {
+            entity.setApprovalHistory(new ArrayList<>());
+        }
+        entity.getApprovalHistory().add(historyItem);
+
+        // Check if there are further approval levels
+        if (currentLevel < totalLevels) {
+            // Advance to next level
+            int nextLevel = currentLevel + 1;
+            entity.setCurrentLevel(nextLevel);
+            entity.setReviewedBy(approver);
+            entity.setReviewedAt(LocalDateTime.now());
+            entity.setAdminRemark("Level " + currentLevel + " approved by " + approver + ". Pending Level " + nextLevel);
+            entity.setUpdatedAt(LocalDateTime.now());
+
+            ServiceRequestEntity savedEntity = requestRepository.save(entity);
+            log.info("Request ID: {} advanced to Level {} by {}", id, nextLevel, approver);
+
+            auditRepository.save(ServiceRequestAuditEntity.builder()
+                    .requestId(savedEntity.getId())
+                    .serviceName(savedEntity.getServiceName())
+                    .accountId(savedEntity.getAccountId())
+                    .investorCode(savedEntity.getInvestorCode())
+                    .action("APPROVE_LEVEL_" + currentLevel)
+                    .status(savedEntity.getStatus().name())
+                    .performedBy(approver)
+                    .remark(savedEntity.getAdminRemark())
+                    .timestamp(LocalDateTime.now())
+                    .build());
+
+            serviceRequestNotificationUtil.sendNotification(savedEntity, savedEntity.getStatus());
+            return ServiceResponse.success("Level " + currentLevel + " approved. Request advanced to Level " + nextLevel, mapToAdminResponseDto(savedEntity));
+        }
+
+        // --- FINAL LEVEL APPROVAL ---
         // 2. Re-fetch current account from local AccountSnapshotService
         AccountSnapshot currentAccount = accountSnapshotService.getAccountById(entity.getAccountId());
 
@@ -104,15 +173,25 @@ public class AdminServiceRequestServiceImpl {
         // 4. Apply changes directly to local AccountEntity in MongoDB
         accountSnapshotService.applyServiceRequest(entity);
 
-        // 5. Update Status to APPROVED
+        // 5. Update Status & final review details
         entity.setStatus(ServiceRequestStatus.APPROVED);
-        entity.setReviewedBy(approvalDto != null ? approvalDto.getReviewedBy() : "ADMIN");
+        entity.setReviewedBy(approver);
         entity.setReviewedAt(LocalDateTime.now());
-        entity.setAdminRemark(approvalDto != null ? approvalDto.getAdminRemark() : "Approved by administrator");
+        entity.setAdminRemark(remark);
         entity.setUpdatedAt(LocalDateTime.now());
 
+        // 6. Trigger Downstream API Dispatch if configured
+        if (config != null && config.getApiConfig() != null && config.getApiConfig().getTargetUrl() != null && !config.getApiConfig().getTargetUrl().isBlank()) {
+            boolean dispatchOk = downstreamApiDispatcherService.dispatch(entity, config);
+            if (dispatchOk) {
+                entity.setStatus(ServiceRequestStatus.EXECUTED);
+            } else {
+                entity.setStatus(ServiceRequestStatus.EXECUTION_FAILED);
+            }
+        }
+
         ServiceRequestEntity savedEntity = requestRepository.save(entity);
-        log.info("Successfully approved service request ID: {} for account: {}", id, entity.getAccountId());
+        log.info("Final approval completed for request ID: {}. Final status: {}", id, savedEntity.getStatus());
 
         // Audit Record
         auditRepository.save(ServiceRequestAuditEntity.builder()
@@ -120,16 +199,16 @@ public class AdminServiceRequestServiceImpl {
                 .serviceName(savedEntity.getServiceName())
                 .accountId(savedEntity.getAccountId())
                 .investorCode(savedEntity.getInvestorCode())
-                .action("APPROVE")
-                .status(ServiceRequestStatus.APPROVED.name())
-                .performedBy(savedEntity.getReviewedBy())
+                .action("FINAL_APPROVE")
+                .status(savedEntity.getStatus().name())
+                .performedBy(approver)
                 .remark(savedEntity.getAdminRemark())
                 .timestamp(LocalDateTime.now())
                 .build());
 
         serviceRequestNotificationUtil.sendNotification(savedEntity, savedEntity.getStatus());
 
-        return ServiceResponse.success("Service request approved successfully", mapToAdminResponseDto(savedEntity));
+        return ServiceResponse.success("Service request fully approved with status: " + savedEntity.getStatus(), mapToAdminResponseDto(savedEntity));
     }
 
     public ServiceResponse<AdminServiceRequestResponseDto> rejectRequest(String id, RejectionRequestDto rejectionDto) {
@@ -140,14 +219,34 @@ public class AdminServiceRequestServiceImpl {
             throw new InvalidRequestException("Cannot reject request. Current status is " + entity.getStatus());
         }
 
+        int currentLevel = entity.getCurrentLevel() != null ? entity.getCurrentLevel() : 1;
+        String approver = (rejectionDto != null && rejectionDto.getReviewedBy() != null) ? rejectionDto.getReviewedBy() : "ADMIN";
+        String approverRole = (rejectionDto != null && rejectionDto.getRole() != null) ? rejectionDto.getRole() : "ADMIN";
+        String remark = (rejectionDto != null && rejectionDto.getAdminRemark() != null) ? rejectionDto.getAdminRemark() : "Rejected by administrator";
+
+        ApprovalHistoryItem historyItem = ApprovalHistoryItem.builder()
+                .level(currentLevel)
+                .levelName("Level " + currentLevel)
+                .action("REJECTED")
+                .actionBy(approver)
+                .role(approverRole)
+                .remark(remark)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        if (entity.getApprovalHistory() == null) {
+            entity.setApprovalHistory(new ArrayList<>());
+        }
+        entity.getApprovalHistory().add(historyItem);
+
         entity.setStatus(ServiceRequestStatus.REJECTED);
-        entity.setReviewedBy(rejectionDto != null ? rejectionDto.getReviewedBy() : "ADMIN");
+        entity.setReviewedBy(approver);
         entity.setReviewedAt(LocalDateTime.now());
-        entity.setAdminRemark(rejectionDto != null ? rejectionDto.getAdminRemark() : "Rejected by administrator");
+        entity.setAdminRemark(remark);
         entity.setUpdatedAt(LocalDateTime.now());
 
         ServiceRequestEntity savedEntity = requestRepository.save(entity);
-        log.info("Service request ID: {} rejected by admin. Reason: {}", id, savedEntity.getAdminRemark());
+        log.info("Service request ID: {} rejected at Level {}. Reason: {}", id, currentLevel, remark);
 
         // Audit Record
         auditRepository.save(ServiceRequestAuditEntity.builder()
@@ -155,14 +254,49 @@ public class AdminServiceRequestServiceImpl {
                 .serviceName(savedEntity.getServiceName())
                 .accountId(savedEntity.getAccountId())
                 .investorCode(savedEntity.getInvestorCode())
-                .action("REJECT")
+                .action("REJECT_LEVEL_" + currentLevel)
                 .status(ServiceRequestStatus.REJECTED.name())
-                .performedBy(savedEntity.getReviewedBy())
-                .remark(savedEntity.getAdminRemark())
+                .performedBy(approver)
+                .remark(remark)
                 .timestamp(LocalDateTime.now())
                 .build());
 
+        serviceRequestNotificationUtil.sendNotification(savedEntity, savedEntity.getStatus());
+
         return ServiceResponse.success("Service request rejected successfully", mapToAdminResponseDto(savedEntity));
+    }
+
+    public ServiceResponse<AdminServiceRequestResponseDto> retryExecution(String id) {
+        ServiceRequestEntity entity = requestRepository.findById(id)
+                .orElseThrow(() -> new RequestNotFoundException("Service request not found with ID: " + id));
+
+        if (entity.getStatus() != ServiceRequestStatus.EXECUTION_FAILED && entity.getStatus() != ServiceRequestStatus.APPROVED) {
+            throw new InvalidRequestException("Can only retry execution for requests in EXECUTION_FAILED or APPROVED status. Current status: " + entity.getStatus());
+        }
+
+        ServiceRequestConfigEntity config = configRepository.findByServiceName(entity.getServiceName()).orElse(null);
+        boolean dispatchOk = downstreamApiDispatcherService.dispatch(entity, config);
+        if (dispatchOk) {
+            entity.setStatus(ServiceRequestStatus.EXECUTED);
+        } else {
+            entity.setStatus(ServiceRequestStatus.EXECUTION_FAILED);
+        }
+        entity.setUpdatedAt(LocalDateTime.now());
+        ServiceRequestEntity saved = requestRepository.save(entity);
+
+        auditRepository.save(ServiceRequestAuditEntity.builder()
+                .requestId(saved.getId())
+                .serviceName(saved.getServiceName())
+                .accountId(saved.getAccountId())
+                .investorCode(saved.getInvestorCode())
+                .action("RETRY_EXECUTION")
+                .status(saved.getStatus().name())
+                .performedBy("ADMIN")
+                .remark("Execution retry result: " + saved.getStatus())
+                .timestamp(LocalDateTime.now())
+                .build());
+
+        return ServiceResponse.success("Downstream execution retried. Current status: " + saved.getStatus(), mapToAdminResponseDto(saved));
     }
 
     private void verifyAccountHasNotChanged(ServiceRequestEntity entity, AccountSnapshot currentAccount) {
@@ -242,6 +376,10 @@ public class AdminServiceRequestServiceImpl {
                 .fieldDetails(presignedDetails)
                 .listItemIdentifierValue(entity.getListItemIdentifierValue())
                 .status(entity.getStatus())
+                .currentLevel(entity.getCurrentLevel())
+                .totalLevels(entity.getTotalLevels())
+                .approvalHistory(entity.getApprovalHistory())
+                .downstreamExecution(entity.getDownstreamExecution())
                 .adminRemark(entity.getAdminRemark())
                 .reviewedBy(entity.getReviewedBy())
                 .reviewedAt(entity.getReviewedAt())

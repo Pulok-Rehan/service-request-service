@@ -1,5 +1,6 @@
 package com.beacepl.service_request_service.entity;
 
+import com.beacepl.service_request_service.enums.AudienceType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -42,6 +43,7 @@ public class ServiceRequestConfigEntity {
 
     private List<String> allowedActions;
 
+    /** Form fields configured for frontend rendering and AccountEntity mapping */
     private List<FieldConfigEntity> fields;
 
     private String section;
@@ -51,6 +53,16 @@ public class ServiceRequestConfigEntity {
     private Integer sectionOrder;
 
     private Integer displayOrder;
+
+    /** Target audience: CLIENT, RM, or BOTH */
+    @Builder.Default
+    private AudienceType targetAudience = AudienceType.BOTH;
+
+    /** Downstream target API execution metadata (URL, method, headers, params, body) */
+    private ApiConfig apiConfig;
+
+    /** Multi-level approval configuration */
+    private List<ApprovalLevelConfig> approvalLevels;
 
     @CreatedDate
     private LocalDateTime createdAt;

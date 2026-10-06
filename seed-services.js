@@ -18,15 +18,35 @@ db.ServiceRequestConfig.insertMany([
     "sectionDisplayName": "Personal Details",
     "sectionOrder": 1,
     "displayOrder": 1,
+    "targetAudience": "BOTH",
     "fields": [
       {
         "fieldName": "newMobileNumber",
         "label": "New Mobile Number",
         "dataType": "NUMBER",
         "required": true,
-        "validationRegex": "^01[3-9]\\d{8}$",
         "accountFieldPath": "mobileNumber",
         "file": false
+      }
+    ],
+    "apiConfig": {
+      "targetUrl": "http://10.20.242.239:9092/api/v1/accounts/{accountId}/mobile",
+      "httpMethod": "PUT",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "pathParams": ["accountId"],
+      "queryParams": {},
+      "bodyTemplate": {
+        "mobileNumber": "${fieldValues.newMobileNumber}"
+      }
+    },
+    "approvalLevels": [
+      {
+        "level": 1,
+        "levelName": "Branch RM Review",
+        "allowedRoles": ["ROLE_RM", "ROLE_BRANCH_MANAGER"],
+        "specificApproverIds": []
       }
     ],
     "createdAt": new Date(),
@@ -46,15 +66,35 @@ db.ServiceRequestConfig.insertMany([
     "sectionDisplayName": "Personal Details",
     "sectionOrder": 1,
     "displayOrder": 2,
+    "targetAudience": "BOTH",
     "fields": [
       {
         "fieldName": "newEmailAddress",
         "label": "New Email Address",
         "dataType": "EMAIL",
         "required": true,
-        "validationRegex": null,
         "accountFieldPath": "emailAddress",
         "file": false
+      }
+    ],
+    "apiConfig": {
+      "targetUrl": "http://10.20.242.239:9092/api/v1/accounts/{accountId}/email",
+      "httpMethod": "PUT",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "pathParams": ["accountId"],
+      "queryParams": {},
+      "bodyTemplate": {
+        "emailAddress": "${fieldValues.newEmailAddress}"
+      }
+    },
+    "approvalLevels": [
+      {
+        "level": 1,
+        "levelName": "Branch RM Review",
+        "allowedRoles": ["ROLE_RM", "ROLE_BRANCH_MANAGER"],
+        "specificApproverIds": []
       }
     ],
     "createdAt": new Date(),
@@ -74,6 +114,7 @@ db.ServiceRequestConfig.insertMany([
     "sectionDisplayName": "Contact Information",
     "sectionOrder": 2,
     "displayOrder": 1,
+    "targetAudience": "BOTH",
     "fields": [
       { "fieldName": "addressLine1", "label": "Address Line 1", "dataType": "TEXT", "required": true, "accountFieldPath": "addressLine1", "file": false },
       { "fieldName": "addressLine2", "label": "Address Line 2", "dataType": "TEXT", "required": false, "accountFieldPath": "addressLine2", "file": false },
@@ -81,6 +122,16 @@ db.ServiceRequestConfig.insertMany([
       { "fieldName": "state", "label": "State", "dataType": "TEXT", "required": true, "accountFieldPath": "state", "file": false },
       { "fieldName": "zipCode", "label": "Zip Code", "dataType": "TEXT", "required": true, "accountFieldPath": "zipCode", "file": false },
       { "fieldName": "country", "label": "Country", "dataType": "TEXT", "required": true, "accountFieldPath": "country", "file": false }
+    ],
+    "apiConfig": {
+      "targetUrl": "http://10.20.242.239:9092/api/v1/accounts/{accountId}/address",
+      "httpMethod": "PUT",
+      "headers": { "Content-Type": "application/json" },
+      "pathParams": ["accountId"]
+    },
+    "approvalLevels": [
+      { "level": 1, "levelName": "RM Initial Verification", "allowedRoles": ["ROLE_RM"] },
+      { "level": 2, "levelName": "Compliance Head Approval", "allowedRoles": ["ROLE_COMPLIANCE", "ROLE_ADMIN"] }
     ],
     "createdAt": new Date(),
     "updatedAt": new Date()
@@ -99,9 +150,55 @@ db.ServiceRequestConfig.insertMany([
     "sectionDisplayName": "Tax Information",
     "sectionOrder": 3,
     "displayOrder": 1,
+    "targetAudience": "BOTH",
     "fields": [
       { "fieldName": "tinNumber", "label": "TIN Number", "dataType": "STRING", "required": true, "accountFieldPath": "tinNumber", "file": false },
       { "fieldName": "tinCertificate", "label": "TIN Certificate Document", "dataType": "FILE", "required": false, "accountFieldPath": "tinCertificate", "file": true }
+    ],
+    "apiConfig": {
+      "targetUrl": "http://10.20.242.239:9092/api/v1/accounts/{accountId}/tin",
+      "httpMethod": "PUT",
+      "headers": { "Content-Type": "application/json" },
+      "pathParams": ["accountId"]
+    },
+    "approvalLevels": [
+      { "level": 1, "levelName": "Branch Operations Review", "allowedRoles": ["ROLE_OPS", "ROLE_RM"] },
+      { "level": 2, "levelName": "Tax Compliance Approval", "allowedRoles": ["ROLE_COMPLIANCE", "ROLE_ADMIN"] }
+    ],
+    "createdAt": new Date(),
+    "updatedAt": new Date()
+  },
+  {
+    "serviceName": "BANK_CHANGE",
+    "displayName": "Change Bank Account",
+    "description": "Update bank account number, bank name, routing number, or branch",
+    "active": true,
+    "multipart": true,
+    "listBased": false,
+    "targetListField": null,
+    "listIdentifierField": null,
+    "allowedActions": ["EDIT"],
+    "section": "BANK_INFO",
+    "sectionDisplayName": "Bank Information",
+    "sectionOrder": 4,
+    "displayOrder": 1,
+    "targetAudience": "BOTH",
+    "fields": [
+      { "fieldName": "bankAccountNumber", "label": "Bank Account Number", "dataType": "STRING", "required": true, "accountFieldPath": "bankAccountNumber", "file": false },
+      { "fieldName": "bankName", "label": "Bank Name", "dataType": "TEXT", "required": true, "accountFieldPath": "bankName", "file": false },
+      { "fieldName": "branchName", "label": "Branch Name", "dataType": "TEXT", "required": true, "accountFieldPath": "branchName", "file": false },
+      { "fieldName": "routingNumber", "label": "Routing Number", "dataType": "STRING", "required": true, "accountFieldPath": "routingNumber", "file": false },
+      { "fieldName": "chequeLeaf", "label": "Cheque Leaf Document", "dataType": "FILE", "required": false, "accountFieldPath": "chequeLeaf", "file": true }
+    ],
+    "apiConfig": {
+      "targetUrl": "http://10.20.242.239:9092/api/v1/accounts/{accountId}/bank",
+      "httpMethod": "PUT",
+      "headers": { "Content-Type": "application/json" },
+      "pathParams": ["accountId"]
+    },
+    "approvalLevels": [
+      { "level": 1, "levelName": "Branch Manager Review", "allowedRoles": ["ROLE_BRANCH_MANAGER", "ROLE_RM"] },
+      { "level": 2, "levelName": "Settlement Accounts Head Approval", "allowedRoles": ["ROLE_SETTLEMENT", "ROLE_ADMIN"] }
     ],
     "createdAt": new Date(),
     "updatedAt": new Date()
@@ -118,8 +215,9 @@ db.ServiceRequestConfig.insertMany([
     "allowedActions": ["ADD"],
     "section": "NOMINEE",
     "sectionDisplayName": "Nominee Information",
-    "sectionOrder": 4,
+    "sectionOrder": 5,
     "displayOrder": 1,
+    "targetAudience": "BOTH",
     "fields": [
       { "fieldName": "name", "label": "Nominee Name", "dataType": "TEXT", "required": true, "accountFieldPath": "name", "file": false },
       { "fieldName": "relation", "label": "Relation", "dataType": "TEXT", "required": true, "accountFieldPath": "relation", "file": false },
@@ -127,67 +225,21 @@ db.ServiceRequestConfig.insertMany([
       { "fieldName": "percentage", "label": "Percentage Share", "dataType": "NUMBER", "required": true, "accountFieldPath": "percentage", "file": false },
       { "fieldName": "mobileNumber", "label": "Mobile Number", "dataType": "NUMBER", "required": false, "accountFieldPath": "mobileNumber", "file": false },
       { "fieldName": "address", "label": "Address", "dataType": "TEXT", "required": false, "accountFieldPath": "address", "file": false },
-      { "fieldName": "city", "label": "City", "dataType": "TEXT", "required": false, "accountFieldPath": "city", "file": false },
-      { "fieldName": "state", "label": "State", "dataType": "TEXT", "required": false, "accountFieldPath": "state", "file": false },
-      { "fieldName": "zipCode", "label": "Zip Code", "dataType": "TEXT", "required": false, "accountFieldPath": "zipCode", "file": false },
-      { "fieldName": "country", "label": "Country", "dataType": "TEXT", "required": false, "accountFieldPath": "country", "file": false },
-      { "fieldName": "residency", "label": "Residency", "dataType": "TEXT", "required": false, "accountFieldPath": "residency", "file": false },
-      { "fieldName": "nomineeNidFront", "label": "Nominee NID Front Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidFront", "file": true },
-      { "fieldName": "nomineeNidBack", "label": "Nominee NID Back Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidBack", "file": true },
-      { "fieldName": "nomineePhoto", "label": "Nominee Passport Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineePhoto", "file": true },
-      { "fieldName": "nomineeSignature", "label": "Nominee Signature", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeSignature", "file": true },
-      { "fieldName": "minor", "label": "Is Minor", "dataType": "BOOLEAN", "required": false, "accountFieldPath": "minor", "file": false },
-      { "fieldName": "guardianName", "label": "Guardian Name", "dataType": "TEXT", "required": false, "accountFieldPath": "guardianName", "file": false },
-      { "fieldName": "relationshipWithNominee", "label": "Relationship with Nominee", "dataType": "TEXT", "required": false, "accountFieldPath": "relationshipWithNominee", "file": false },
-      { "fieldName": "guardianNidNumber", "label": "Guardian NID Number", "dataType": "STRING", "required": false, "accountFieldPath": "guardianNidNumber", "file": false },
-      { "fieldName": "guardianNidFront", "label": "Guardian NID Front", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidFront", "file": true },
-      { "fieldName": "guardianNidBack", "label": "Guardian NID Back", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidBack", "file": true },
-      { "fieldName": "guardianSignature", "label": "Guardian Signature", "dataType": "FILE", "required": false, "accountFieldPath": "guardianSignature", "file": true }
+      { "fieldName": "nomineePhoto", "label": "Nominee Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineePhoto", "file": true }
     ],
-    "createdAt": new Date(),
-    "updatedAt": new Date()
-  },
-  {
-    "serviceName": "NOMINEE_EDIT",
-    "displayName": "Edit Nominee",
-    "description": "Edit an existing nominee's details",
-    "active": true,
-    "multipart": true,
-    "listBased": true,
-    "targetListField": "nominees",
-    "listIdentifierField": "nid",
-    "allowedActions": ["EDIT"],
-    "section": "NOMINEE",
-    "sectionDisplayName": "Nominee Information",
-    "sectionOrder": 4,
-    "displayOrder": 2,
-    "fields": [
-      { "fieldName": "name", "label": "Nominee Name", "dataType": "TEXT", "required": true, "accountFieldPath": "name", "file": false },
-      { "fieldName": "relation", "label": "Relation", "dataType": "TEXT", "required": true, "accountFieldPath": "relation", "file": false },
-      { "fieldName": "nid", "label": "Nominee NID Number", "dataType": "STRING", "required": true, "accountFieldPath": "nid", "file": false },
-      { "fieldName": "percentage", "label": "Percentage Share", "dataType": "NUMBER", "required": true, "accountFieldPath": "percentage", "file": false },
-      { "fieldName": "mobileNumber", "label": "Mobile Number", "dataType": "NUMBER", "required": false, "accountFieldPath": "mobileNumber", "file": false },
-      { "fieldName": "address", "label": "Address", "dataType": "TEXT", "required": false, "accountFieldPath": "address", "file": false },
-      { "fieldName": "city", "label": "City", "dataType": "TEXT", "required": false, "accountFieldPath": "city", "file": false },
-      { "fieldName": "state", "label": "State", "dataType": "TEXT", "required": false, "accountFieldPath": "state", "file": false },
-      { "fieldName": "zipCode", "label": "Zip Code", "dataType": "TEXT", "required": false, "accountFieldPath": "zipCode", "file": false },
-      { "fieldName": "country", "label": "Country", "dataType": "TEXT", "required": false, "accountFieldPath": "country", "file": false },
-      { "fieldName": "residency", "label": "Residency", "dataType": "TEXT", "required": false, "accountFieldPath": "residency", "file": false },
-      { "fieldName": "nomineeNidFront", "label": "Nominee NID Front Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidFront", "file": true },
-      { "fieldName": "nomineeNidBack", "label": "Nominee NID Back Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeNidBack", "file": true },
-      { "fieldName": "nomineePhoto", "label": "Nominee Passport Photo", "dataType": "FILE", "required": false, "accountFieldPath": "nomineePhoto", "file": true },
-      { "fieldName": "nomineeSignature", "label": "Nominee Signature", "dataType": "FILE", "required": false, "accountFieldPath": "nomineeSignature", "file": true },
-      { "fieldName": "minor", "label": "Is Minor", "dataType": "BOOLEAN", "required": false, "accountFieldPath": "minor", "file": false },
-      { "fieldName": "guardianName", "label": "Guardian Name", "dataType": "TEXT", "required": false, "accountFieldPath": "guardianName", "file": false },
-      { "fieldName": "relationshipWithNominee", "label": "Relationship with Nominee", "dataType": "TEXT", "required": false, "accountFieldPath": "relationshipWithNominee", "file": false },
-      { "fieldName": "guardianNidNumber", "label": "Guardian NID Number", "dataType": "STRING", "required": false, "accountFieldPath": "guardianNidNumber", "file": false },
-      { "fieldName": "guardianNidFront", "label": "Guardian NID Front", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidFront", "file": true },
-      { "fieldName": "guardianNidBack", "label": "Guardian NID Back", "dataType": "FILE", "required": false, "accountFieldPath": "guardianNidBack", "file": true },
-      { "fieldName": "guardianSignature", "label": "Guardian Signature", "dataType": "FILE", "required": false, "accountFieldPath": "guardianSignature", "file": true }
+    "apiConfig": {
+      "targetUrl": "http://10.20.242.239:9092/api/v1/accounts/{accountId}/nominees",
+      "httpMethod": "POST",
+      "headers": { "Content-Type": "application/json" },
+      "pathParams": ["accountId"]
+    },
+    "approvalLevels": [
+      { "level": 1, "levelName": "Branch RM Review", "allowedRoles": ["ROLE_RM", "ROLE_BRANCH_MANAGER"] },
+      { "level": 2, "levelName": "Central Operations Approval", "allowedRoles": ["ROLE_OPS", "ROLE_ADMIN"] }
     ],
     "createdAt": new Date(),
     "updatedAt": new Date()
   }
 ]);
 
-print("Successfully seeded ServiceRequestConfig collection with initial service definitions.");
+print("Successfully seeded ServiceRequestConfig collection with " + db.ServiceRequestConfig.countDocuments() + " services.");

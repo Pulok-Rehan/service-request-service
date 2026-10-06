@@ -35,6 +35,26 @@ public class ServiceRequestConfigController {
     }
 
     /**
+     * Client Portal API to retrieve service requests available for Clients.
+     * GET /service-request/client/service-request-list
+     */
+    @GetMapping("/service-request/client/service-request-list")
+    public ServiceResponse<List<ServiceSectionDto>> getClientConfigurations() {
+        log.info("Received request for CLIENT active service configurations");
+        return configService.getClientConfigurationsGrouped();
+    }
+
+    /**
+     * RM Portal API to retrieve service requests available for Relationship Managers.
+     * GET /service-request/rm/service-request-list
+     */
+    @GetMapping("/service-request/rm/service-request-list")
+    public ServiceResponse<List<ServiceSectionDto>> getRmConfigurations() {
+        log.info("Received request for RM active service configurations");
+        return configService.getRmConfigurationsGrouped();
+    }
+
+    /**
      * Admin endpoint to list all service configurations.
      */
     @GetMapping("/admin/service-request-config")

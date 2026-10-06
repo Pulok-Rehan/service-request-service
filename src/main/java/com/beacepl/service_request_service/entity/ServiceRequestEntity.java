@@ -55,8 +55,10 @@ public class ServiceRequestEntity {
 
     private String action;
 
+    /** Map of existing field values resolved from AccountEntity at request creation time */
     private Map<String, Object> oldValues;
 
+    /** Map of requested new field values submitted by user */
     private Map<String, Object> newValues;
 
     /** Detailed list of changed fields with display names, data types, file flags, old values, and new values */
@@ -67,6 +69,20 @@ public class ServiceRequestEntity {
     @Indexed
     @Builder.Default
     private ServiceRequestStatus status = ServiceRequestStatus.PENDING;
+
+    /** Current approval level in progress (1, 2, ... totalLevels) */
+    @Builder.Default
+    private Integer currentLevel = 1;
+
+    /** Total number of approval levels required for this service */
+    @Builder.Default
+    private Integer totalLevels = 1;
+
+    /** Audit history of level-wise approvals and rejections */
+    private List<ApprovalHistoryItem> approvalHistory;
+
+    /** Downstream API execution trail and response info */
+    private DownstreamExecutionInfo downstreamExecution;
 
     private String adminRemark;
 

@@ -119,4 +119,14 @@ public class AdminServiceRequestController {
                     .build());
         }
     }
+
+    /**
+     * Admin retry execution API if downstream dispatch failed.
+     * POST /admin/service-request/{id}/retry-execution
+     */
+    @PostMapping("/{id}/retry-execution")
+    public ServiceResponse<AdminServiceRequestResponseDto> retryExecution(@PathVariable String id) {
+        log.info("Admin retrying downstream execution for service request ID: {}", id);
+        return adminService.retryExecution(id);
+    }
 }

@@ -20,8 +20,6 @@ public class FieldConfigEntity {
 
     private boolean required;
 
-    private String validationRegex;
-
     private Integer minLength;
 
     private Integer maxLength;

@@ -1,7 +1,10 @@
 package com.beacepl.service_request_service.config;
 
+import com.beacepl.service_request_service.entity.ApiConfig;
+import com.beacepl.service_request_service.entity.ApprovalLevelConfig;
 import com.beacepl.service_request_service.entity.FieldConfigEntity;
 import com.beacepl.service_request_service.entity.ServiceRequestConfigEntity;
+import com.beacepl.service_request_service.enums.AudienceType;
 import com.beacepl.service_request_service.enums.FieldDataType;
 import com.beacepl.service_request_service.repository.ServiceRequestConfigRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
@@ -27,6 +31,7 @@ public class ServiceConfigInitializer implements CommandLineRunner {
         createEmailChangeConfig();
         createAddressChangeConfig();
         createTinChangeConfig();
+        createBankChangeConfig();
         createNomineeAddConfig();
         createNomineeEditConfig();
 
@@ -47,15 +52,29 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                     .sectionDisplayName("Personal Details")
                     .sectionOrder(1)
                     .displayOrder(1)
+                    .targetAudience(AudienceType.BOTH)
                     .fields(List.of(
                             FieldConfigEntity.builder()
                                     .fieldName("newMobileNumber")
                                     .label("New Mobile Number")
                                     .dataType(FieldDataType.NUMBER)
                                     .required(true)
-                                    .validationRegex("^01[3-9]\\d{8}$")
                                     .accountFieldPath("mobileNumber")
                                     .file(false)
+                                    .build()
+                    ))
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/mobile")
+                            .httpMethod("PUT")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .bodyTemplate(Map.of("mobileNumber", "${fieldValues.newMobileNumber}"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("Branch RM Review")
+                                    .allowedRoles(List.of("ROLE_RM", "ROLE_BRANCH_MANAGER"))
                                     .build()
                     ))
                     .build();
@@ -78,6 +97,7 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                     .sectionDisplayName("Personal Details")
                     .sectionOrder(1)
                     .displayOrder(2)
+                    .targetAudience(AudienceType.BOTH)
                     .fields(List.of(
                             FieldConfigEntity.builder()
                                     .fieldName("newEmailAddress")
@@ -86,6 +106,20 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                                     .required(true)
                                     .accountFieldPath("emailAddress")
                                     .file(false)
+                                    .build()
+                    ))
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/email")
+                            .httpMethod("PUT")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .bodyTemplate(Map.of("emailAddress", "${fieldValues.newEmailAddress}"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("Branch RM Review")
+                                    .allowedRoles(List.of("ROLE_RM", "ROLE_BRANCH_MANAGER"))
                                     .build()
                     ))
                     .build();
@@ -108,6 +142,7 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                     .sectionDisplayName("Contact Information")
                     .sectionOrder(2)
                     .displayOrder(1)
+                    .targetAudience(AudienceType.BOTH)
                     .fields(List.of(
                             FieldConfigEntity.builder().fieldName("addressLine1").label("Address Line 1").dataType(FieldDataType.TEXT).required(true).accountFieldPath("addressLine1").file(false).build(),
                             FieldConfigEntity.builder().fieldName("addressLine2").label("Address Line 2").dataType(FieldDataType.TEXT).required(false).accountFieldPath("addressLine2").file(false).build(),
@@ -115,6 +150,24 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                             FieldConfigEntity.builder().fieldName("state").label("State").dataType(FieldDataType.TEXT).required(true).accountFieldPath("state").file(false).build(),
                             FieldConfigEntity.builder().fieldName("zipCode").label("Zip Code").dataType(FieldDataType.TEXT).required(true).accountFieldPath("zipCode").file(false).build(),
                             FieldConfigEntity.builder().fieldName("country").label("Country").dataType(FieldDataType.TEXT).required(true).accountFieldPath("country").file(false).build()
+                    ))
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/address")
+                            .httpMethod("PUT")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("RM Initial Verification")
+                                    .allowedRoles(List.of("ROLE_RM"))
+                                    .build(),
+                            ApprovalLevelConfig.builder()
+                                    .level(2)
+                                    .levelName("Compliance Head Approval")
+                                    .allowedRoles(List.of("ROLE_COMPLIANCE", "ROLE_ADMIN"))
+                                    .build()
                     ))
                     .build();
             configRepository.save(config);
@@ -136,13 +189,78 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                     .sectionDisplayName("Tax Information")
                     .sectionOrder(3)
                     .displayOrder(1)
+                    .targetAudience(AudienceType.BOTH)
                     .fields(List.of(
                             FieldConfigEntity.builder().fieldName("tinNumber").label("TIN Number").dataType(FieldDataType.STRING).required(true).accountFieldPath("tinNumber").file(false).build(),
                             FieldConfigEntity.builder().fieldName("tinCertificate").label("TIN Certificate Document").dataType(FieldDataType.FILE).required(false).accountFieldPath("tinCertificate").file(true).build()
                     ))
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/tin")
+                            .httpMethod("PUT")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("Branch Operations Review")
+                                    .allowedRoles(List.of("ROLE_OPS", "ROLE_RM"))
+                                    .build(),
+                            ApprovalLevelConfig.builder()
+                                    .level(2)
+                                    .levelName("Tax Compliance Approval")
+                                    .allowedRoles(List.of("ROLE_COMPLIANCE", "ROLE_ADMIN"))
+                                    .build()
+                    ))
                     .build();
             configRepository.save(config);
             log.info("Seeded configuration: TIN_CHANGE");
+        }
+    }
+
+    private void createBankChangeConfig() {
+        if (configRepository.findByServiceName("BANK_CHANGE").isEmpty()) {
+            ServiceRequestConfigEntity config = ServiceRequestConfigEntity.builder()
+                    .serviceName("BANK_CHANGE")
+                    .displayName("Change Bank Account")
+                    .description("Update bank account number, bank name, routing number, or branch")
+                    .active(true)
+                    .multipart(true)
+                    .listBased(false)
+                    .allowedActions(List.of("EDIT"))
+                    .section("BANK_INFO")
+                    .sectionDisplayName("Bank Information")
+                    .sectionOrder(4)
+                    .displayOrder(1)
+                    .targetAudience(AudienceType.BOTH)
+                    .fields(List.of(
+                            FieldConfigEntity.builder().fieldName("bankAccountNumber").label("Bank Account Number").dataType(FieldDataType.STRING).required(true).accountFieldPath("bankAccountNumber").file(false).build(),
+                            FieldConfigEntity.builder().fieldName("bankName").label("Bank Name").dataType(FieldDataType.TEXT).required(true).accountFieldPath("bankName").file(false).build(),
+                            FieldConfigEntity.builder().fieldName("branchName").label("Branch Name").dataType(FieldDataType.TEXT).required(true).accountFieldPath("branchName").file(false).build(),
+                            FieldConfigEntity.builder().fieldName("routingNumber").label("Routing Number").dataType(FieldDataType.STRING).required(true).accountFieldPath("routingNumber").file(false).build(),
+                            FieldConfigEntity.builder().fieldName("chequeLeaf").label("Cheque Leaf Document").dataType(FieldDataType.FILE).required(false).accountFieldPath("chequeLeaf").file(true).build()
+                    ))
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/bank")
+                            .httpMethod("PUT")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("Branch Manager Review")
+                                    .allowedRoles(List.of("ROLE_BRANCH_MANAGER", "ROLE_RM"))
+                                    .build(),
+                            ApprovalLevelConfig.builder()
+                                    .level(2)
+                                    .levelName("Settlement Accounts Head Approval")
+                                    .allowedRoles(List.of("ROLE_SETTLEMENT", "ROLE_ADMIN"))
+                                    .build()
+                    ))
+                    .build();
+            configRepository.save(config);
+            log.info("Seeded configuration: BANK_CHANGE");
         }
     }
 
@@ -160,9 +278,28 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                     .allowedActions(List.of("ADD"))
                     .section("NOMINEE")
                     .sectionDisplayName("Nominee Information")
-                    .sectionOrder(4)
+                    .sectionOrder(5)
                     .displayOrder(1)
+                    .targetAudience(AudienceType.BOTH)
                     .fields(getNomineeFields())
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/nominees")
+                            .httpMethod("POST")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("Branch RM Review")
+                                    .allowedRoles(List.of("ROLE_RM", "ROLE_BRANCH_MANAGER"))
+                                    .build(),
+                            ApprovalLevelConfig.builder()
+                                    .level(2)
+                                    .levelName("Central Operations Approval")
+                                    .allowedRoles(List.of("ROLE_OPS", "ROLE_ADMIN"))
+                                    .build()
+                    ))
                     .build();
             configRepository.save(config);
             log.info("Seeded configuration: NOMINEE_ADD");
@@ -183,9 +320,28 @@ public class ServiceConfigInitializer implements CommandLineRunner {
                     .allowedActions(List.of("EDIT"))
                     .section("NOMINEE")
                     .sectionDisplayName("Nominee Information")
-                    .sectionOrder(4)
+                    .sectionOrder(5)
                     .displayOrder(2)
+                    .targetAudience(AudienceType.BOTH)
                     .fields(getNomineeFields())
+                    .apiConfig(ApiConfig.builder()
+                            .targetUrl("http://10.20.242.239:9092/api/v1/accounts/{accountId}/nominees")
+                            .httpMethod("PUT")
+                            .headers(Map.of("Content-Type", "application/json"))
+                            .pathParams(List.of("accountId"))
+                            .build())
+                    .approvalLevels(List.of(
+                            ApprovalLevelConfig.builder()
+                                    .level(1)
+                                    .levelName("Branch RM Review")
+                                    .allowedRoles(List.of("ROLE_RM", "ROLE_BRANCH_MANAGER"))
+                                    .build(),
+                            ApprovalLevelConfig.builder()
+                                    .level(2)
+                                    .levelName("Central Operations Approval")
+                                    .allowedRoles(List.of("ROLE_OPS", "ROLE_ADMIN"))
+                                    .build()
+                    ))
                     .build();
             configRepository.save(config);
             log.info("Seeded configuration: NOMINEE_EDIT");

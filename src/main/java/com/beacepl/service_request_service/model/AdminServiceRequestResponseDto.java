@@ -1,5 +1,7 @@
 package com.beacepl.service_request_service.model;
 
+import com.beacepl.service_request_service.entity.ApprovalHistoryItem;
+import com.beacepl.service_request_service.entity.DownstreamExecutionInfo;
 import com.beacepl.service_request_service.enums.ServiceRequestStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,12 +40,20 @@ public class AdminServiceRequestResponseDto {
 
     private Map<String, Object> newValues;
 
-    /** Rich list of field details for admin UI rendering */
+    /** Rich list of field details for admin UI rendering (label, fieldName, type, oldValue, newValue) */
     private List<FieldChangeDetail> fieldDetails;
 
     private String listItemIdentifierValue;
 
     private ServiceRequestStatus status;
+
+    private Integer currentLevel;
+
+    private Integer totalLevels;
+
+    private List<ApprovalHistoryItem> approvalHistory;
+
+    private DownstreamExecutionInfo downstreamExecution;
 
     private String adminRemark;
 

@@ -99,18 +99,6 @@ public class FieldValidationService {
         // Data Type Validation
         validateDataType(label, field.getDataType(), valueStr);
 
-        // Regex Validation
-        if (field.getValidationRegex() != null && !field.getValidationRegex().isBlank()) {
-            try {
-                if (!Pattern.matches(field.getValidationRegex(), valueStr)) {
-                    throw new InvalidRequestException("Field '" + label + "' has invalid format. Expected format: " + field.getValidationRegex());
-                }
-            } catch (Exception e) {
-                if (e instanceof InvalidRequestException) throw e;
-                log.warn("Regex matching error for field {}: {}", fieldName, e.getMessage());
-            }
-        }
-
         // Length validation
         if (field.getMinLength() != null && valueStr.length() < field.getMinLength()) {
             throw new InvalidRequestException("Field '" + label + "' must be at least " + field.getMinLength() + " characters.");

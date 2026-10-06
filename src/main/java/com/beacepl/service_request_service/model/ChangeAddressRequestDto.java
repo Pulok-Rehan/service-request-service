@@ -9,12 +9,18 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ChangeEmailRequestDto {
+public class ChangeAddressRequestDto {
     private String accountId;
     private String investorCode;
     private String mobileNumber;
     private String email;
-    private String newEmailAddress;
     private String otp;
     private String platformId;
+
+    private String addressLine1;
+    private String addressLine2;
+    private String city;
+    private String state;
+    private String zipCode;
+    private String country;
 }

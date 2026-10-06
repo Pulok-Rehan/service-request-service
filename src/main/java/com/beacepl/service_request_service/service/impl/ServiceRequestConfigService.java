@@ -1,6 +1,7 @@
 package com.beacepl.service_request_service.service.impl;
 
 import com.beacepl.service_request_service.entity.ServiceRequestConfigEntity;
+import com.beacepl.service_request_service.enums.AudienceType;
 import com.beacepl.service_request_service.exceptions.ConfigurationNotFoundException;
 import com.beacepl.service_request_service.model.ServiceResponse;
 import com.beacepl.service_request_service.model.ServiceSectionDto;
@@ -22,14 +23,45 @@ public class ServiceRequestConfigService {
     private final ServiceRequestConfigRepository configRepository;
 
     /**
-     * Retrieves all active service request configurations grouped by section for frontend dynamic UI.
+     * Retrieves all active service request configurations grouped by section.
      */
     public ServiceResponse<List<ServiceSectionDto>> getActiveConfigurationsGrouped() {
         List<ServiceRequestConfigEntity> activeConfigs = configRepository.findByActiveTrueOrderBySectionOrderAscDisplayOrderAsc();
+        return ServiceResponse.success("Service request configurations retrieved successfully", groupConfigsBySection(activeConfigs));
+    }
 
+    /**
+     * Retrieves service request configurations specifically available for CLIENT users.
+     */
+    public ServiceResponse<List<ServiceSectionDto>> getClientConfigurationsGrouped() {
+        List<ServiceRequestConfigEntity> activeConfigs = configRepository.findByActiveTrueOrderBySectionOrderAscDisplayOrderAsc();
+        List<ServiceRequestConfigEntity> clientConfigs = activeConfigs.stream()
+                .filter(c -> c.getTargetAudience() == null
+                        || c.getTargetAudience() == AudienceType.CLIENT
+                        || c.getTargetAudience() == AudienceType.BOTH)
+                .toList();
+
+        return ServiceResponse.success("Client service request configurations retrieved successfully", groupConfigsBySection(clientConfigs));
+    }
+
+    /**
+     * Retrieves service request configurations specifically available for RM (Relationship Manager) users.
+     */
+    public ServiceResponse<List<ServiceSectionDto>> getRmConfigurationsGrouped() {
+        List<ServiceRequestConfigEntity> activeConfigs = configRepository.findByActiveTrueOrderBySectionOrderAscDisplayOrderAsc();
+        List<ServiceRequestConfigEntity> rmConfigs = activeConfigs.stream()
+                .filter(c -> c.getTargetAudience() == null
+                        || c.getTargetAudience() == AudienceType.RM
+                        || c.getTargetAudience() == AudienceType.BOTH)
+                .toList();
+
+        return ServiceResponse.success("RM service request configurations retrieved successfully", groupConfigsBySection(rmConfigs));
+    }
+
+    private List<ServiceSectionDto> groupConfigsBySection(List<ServiceRequestConfigEntity> configs) {
         Map<String, ServiceSectionDto> sectionMap = new LinkedHashMap<>();
 
-        for (ServiceRequestConfigEntity config : activeConfigs) {
+        for (ServiceRequestConfigEntity config : configs) {
             String sectionKey = config.getSection() != null ? config.getSection() : "GENERAL";
             String sectionName = config.getSectionDisplayName() != null ? config.getSectionDisplayName() : "General Services";
             Integer sectionOrder = config.getSectionOrder() != null ? config.getSectionOrder() : 99;
@@ -42,8 +74,7 @@ public class ServiceRequestConfigService {
                     .build()).getServices().add(config);
         }
 
-        List<ServiceSectionDto> sections = new ArrayList<>(sectionMap.values());
-        return ServiceResponse.success("Service request configurations retrieved successfully", sections);
+        return new ArrayList<>(sectionMap.values());
     }
 
     public ServiceResponse<List<ServiceRequestConfigEntity>> listAll() {
@@ -83,6 +114,9 @@ public class ServiceRequestConfigService {
         existing.setSectionDisplayName(config.getSectionDisplayName());
         existing.setSectionOrder(config.getSectionOrder());
         existing.setDisplayOrder(config.getDisplayOrder());
+        existing.setTargetAudience(config.getTargetAudience());
+        existing.setApiConfig(config.getApiConfig());
+        existing.setApprovalLevels(config.getApprovalLevels());
 
         ServiceRequestConfigEntity saved = configRepository.save(existing);
         log.info("Updated ServiceRequestConfigEntity ID: {}", id);

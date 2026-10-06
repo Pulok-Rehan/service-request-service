@@ -54,11 +54,6 @@ public class ServiceRequestValidator {
                 throw new IllegalArgumentException(
                         "Field \"" + field.getLabel() + "\" must be at most " + field.getMaxLength() + " characters");
             }
-            if (StringUtils.hasText(field.getValidationRegex())
-                    && !Pattern.matches(field.getValidationRegex(), stringValue)) {
-                throw new IllegalArgumentException(
-                        "Field \"" + field.getLabel() + "\" is not in a valid format");
-            }
 
             switch (field.getDataType()) {
                 case NUMBER -> {

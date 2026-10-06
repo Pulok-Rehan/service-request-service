@@ -199,6 +199,9 @@ public class ServiceRequestServiceImpl {
                 .fieldDetails(fieldDetails)
                 .platformid(platformId)
                 .listItemIdentifierValue(submitDto.getListItemIdentifierValue())
+                .currentLevel(1)
+                .totalLevels((config.getApprovalLevels() != null && !config.getApprovalLevels().isEmpty()) ? config.getApprovalLevels().size() : 1)
+                .approvalHistory(new ArrayList<>())
                 .status(ServiceRequestStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -269,15 +272,15 @@ public class ServiceRequestServiceImpl {
     }
 
     public ServiceResponse<ServiceConfigAndOldValuesResponseDto> getServiceConfigWithOldValues(
-            String investorCode,
+            String accountIdentifier,
             String serviceName,
             String listItemIdentifierValue
     ) {
         if (serviceName == null || serviceName.isBlank()) {
             throw new InvalidRequestException("serviceName is required");
         }
-        if (investorCode == null || investorCode.isBlank()) {
-            throw new InvalidRequestException("investorCode is required");
+        if (accountIdentifier == null || accountIdentifier.isBlank()) {
+            throw new InvalidRequestException("Account identifier (accountId or investorCode) is required");
         }
 
         // 1. Fetch active service configuration
@@ -285,7 +288,7 @@ public class ServiceRequestServiceImpl {
                 .orElseThrow(() -> new ConfigurationNotFoundException("Active service configuration not found for service: " + serviceName));
 
         // 2. Fetch current account snapshot from local AccountEntity in MongoDB
-        AccountSnapshot account = accountSnapshotService.getAccountById(investorCode);
+        AccountSnapshot account = accountSnapshotService.getAccountById(accountIdentifier);
 
         // 3. Resolve current old values from AccountEntity
         Map<String, Object> oldValues = oldValueResolver.resolveOldValues(account, config, listItemIdentifierValue, null);
@@ -330,7 +333,6 @@ public class ServiceRequestServiceImpl {
                         .dataType(field.getDataType())
                         .valueType(valueType)
                         .required(field.isRequired())
-                        .validationRegex(field.getValidationRegex())
                         .minLength(field.getMinLength())
                         .maxLength(field.getMaxLength())
                         .accountFieldPath(field.getAccountFieldPath())
