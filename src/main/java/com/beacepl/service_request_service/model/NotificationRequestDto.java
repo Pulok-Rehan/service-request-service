@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.Map;
 
 @Data
@@ -26,8 +27,8 @@ public class NotificationRequestDto {
 
     private String sender;
 
-    private String receiverMobile;        // unicast
-    private java.util.List<String> receiverMobiles; // multicast
+    private String receiverPlatformId;        // unicast
+    private List<String> receiverPlatformIds; // multicast
     private String topic;                 // topic
     private String role;                  // role
 
