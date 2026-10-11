@@ -26,6 +26,10 @@ import com.beacepl.service_request_service.repository.ServiceRequestConfigReposi
 import com.beacepl.service_request_service.repository.ServiceRequestRepository;
 import com.beacepl.service_request_service.service.AccountSnapshotService;
 import com.beacepl.service_request_service.service.handler.ServiceRequestHandler;
+import com.beacepl.service_request_service.exceptions.AccountNotFoundException;
+import com.beacepl.service_request_service.exceptions.UnauthorizedServiceRequestException;
+import com.beacepl.service_request_service.service.precheck.ServiceRequestPreCheck;
+import com.beacepl.service_request_service.service.support.ServiceRoleUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -61,6 +65,7 @@ public class ServiceRequestServiceImpl {
     private final AccountSnapshotService accountSnapshotService;
     private final OldValueResolver oldValueResolver;
     private final ServiceRequestNotificationUtil serviceRequestNotificationUtil;
+    private final List<ServiceRequestPreCheck> preChecks;
 
     public ServiceResponse<ServiceRequestEntity> submitServiceRequest(
             ServiceRequestSubmitDto submitDto,
@@ -77,9 +82,39 @@ public class ServiceRequestServiceImpl {
                 .orElseThrow(() -> new ConfigurationNotFoundException(
                         "Active service configuration not found for service: " + serviceName));
 
+        // 1a. Role authorization: only configured requester roles may submit
+        String requesterRole = ServiceRoleUtil.resolveRequesterRole(submitDto.getRequestedByRole());
+        if (!ServiceRoleUtil.isRoleAllowed(config, requesterRole)) {
+            throw new UnauthorizedServiceRequestException("Role " + requesterRole + " is not authorized to submit '"
+                    + config.getDisplayName() + "'. Allowed roles: " + ServiceRoleUtil.effectiveRequesterRoles(config));
+        }
+
+        // 1b. Service-specific pre-checks (e.g. SP availability check) before OTP is sent
+        for (ServiceRequestPreCheck preCheck : preChecks) {
+            if (preCheck.supports(serviceName)) {
+                preCheck.check(submitDto, config);
+            }
+        }
+
         // 2. Account Identification & Validation
         String accountIdentifier = getAccountIdentifier(submitDto);
-        AccountSnapshot account = accountSnapshotService.getAccountById(accountIdentifier);
+        AccountSnapshot account;
+        try {
+            account = accountSnapshotService.getAccountById(accountIdentifier);
+        } catch (AccountNotFoundException e) {
+            if (!ServiceRoleUtil.isRequestValueSource(config)) {
+                throw e;
+            }
+            // Request-sourced services do not depend on AccountEntity; fall back to submitted identifiers
+            log.warn("Account not found for identifier {}. Continuing with submitted values for service {}", accountIdentifier, serviceName);
+            account = AccountSnapshot.builder()
+                    .id(accountIdentifier)
+                    .investorCode(submitDto.getInvestorCode())
+                    .platformId(submitDto.getPlatformId())
+                    .mobileNumber(submitDto.getMobileNumber())
+                    .emailAddress(submitDto.getEmail())
+                    .build();
+        }
 
         String accountId = (account.getId() != null) ? account.getId() : submitDto.getAccountId();
         String investorCode = (account.getInvestorCode() != null) ? account.getInvestorCode()
@@ -89,46 +124,10 @@ public class ServiceRequestServiceImpl {
         String email = (account.getEmailAddress() != null) ? account.getEmailAddress() : submitDto.getEmail();
         String platformId = (account.getPlatformId() != null) ? account.getPlatformId() : submitDto.getPlatformId();
 
-        // 3. OTP Verification Flow
-        if (submitDto.getOtp() == null || submitDto.getOtp().trim().isEmpty()) {
-            String otpValue = String.format("%06d", new java.security.SecureRandom().nextInt(999999));
-            log.info("Generated OTP value: {} for mobile: {}, email: {}", otpValue, mobileNumber, email);
-
-            OtpVerification otpVerification = OtpVerification.builder()
-                    .identifier(mobileNumber != null ? mobileNumber : email)
-                    .otp(otpValue)
-                    .processName(serviceName)
-                    .createdAt(new java.util.Date())
-                    .build();
-            otpRepository.save(otpVerification);
-
-            try {
-                otpClient.sendOtp(mobileNumber, email, otpValue);
-            } catch (Exception e) {
-                log.warn("Failed to send OTP via OtpClient: {}", e.getMessage());
-            }
-
-            throw new OtpNotFoundException("OTP is required and has been sent to mobile/email");
+        // 3. OTP Verification Flow (skipped when the service is configured with otpRequired=false)
+        if (ServiceRoleUtil.isOtpRequired(config)) {
+            verifyOtp(submitDto, serviceName, mobileNumber, email);
         }
-
-        boolean isOtpValid = false;
-        List<OtpVerification> historicalOtps = otpRepository.findByIdentifierAndProcessNameOrderByCreatedAtDesc(
-                mobileNumber != null ? mobileNumber : email, serviceName);
-        if (!historicalOtps.isEmpty() && submitDto.getOtp().equals(historicalOtps.get(0).getOtp())) {
-            isOtpValid = true;
-        } else {
-            try {
-                isOtpValid = otpClient.validateOtp(mobileNumber, email, submitDto.getOtp());
-            } catch (Exception e) {
-                log.warn("OtpClient validation call error: {}", e.getMessage());
-            }
-        }
-
-        if (!isOtpValid) {
-            log.warn("OTP validation failed for identifier: {}", mobileNumber);
-            throw new OtpNotMatchException("OTP validation failed");
-        }
-
         // 4. Duplicate Pending Request Protection (Requirement 37)
         if (!"NOMINEE_ADD".equalsIgnoreCase(serviceName)) {
             boolean duplicateExists = requestRepository.existsByAccountIdAndServiceNameAndStatus(
@@ -199,6 +198,8 @@ public class ServiceRequestServiceImpl {
                 .fieldDetails(fieldDetails)
                 .platformid(platformId)
                 .listItemIdentifierValue(submitDto.getListItemIdentifierValue())
+                .requestedBy(submitDto.getRequestedBy())
+                .requestedByRole(requesterRole)
                 .currentLevel(1)
                 .totalLevels((config.getApprovalLevels() != null && !config.getApprovalLevels().isEmpty()) ? config.getApprovalLevels().size() : 1)
                 .approvalHistory(new ArrayList<>())
@@ -218,7 +219,7 @@ public class ServiceRequestServiceImpl {
                 .investorCode(investorCode)
                 .action(action)
                 .status(ServiceRequestStatus.PENDING.name())
-                .performedBy(email != null ? email : mobileNumber)
+                .performedBy(submitDto.getRequestedBy() != null ? submitDto.getRequestedBy() : (email != null ? email : mobileNumber))
                 .remark("Service request submitted")
                 .timestamp(LocalDateTime.now())
                 .build());
@@ -226,6 +227,50 @@ public class ServiceRequestServiceImpl {
         serviceRequestNotificationUtil.sendNotification(savedEntity, savedEntity.getStatus());
 
         return ServiceResponse.success("Service request submitted successfully.", enrichWithPresignedUrls(savedEntity));
+    }
+
+    /**
+     * Sends an OTP when none is supplied (throws OtpNotFoundException), otherwise validates it.
+     */
+    private void verifyOtp(ServiceRequestSubmitDto submitDto, String serviceName, String mobileNumber, String email) {
+        if (submitDto.getOtp() == null || submitDto.getOtp().trim().isEmpty()) {
+            String otpValue = String.format("%06d", new java.security.SecureRandom().nextInt(999999));
+            log.info("Generated OTP value: {} for mobile: {}, email: {}", otpValue, mobileNumber, email);
+
+            OtpVerification otpVerification = OtpVerification.builder()
+                    .identifier(mobileNumber != null ? mobileNumber : email)
+                    .otp(otpValue)
+                    .processName(serviceName)
+                    .createdAt(new java.util.Date())
+                    .build();
+            otpRepository.save(otpVerification);
+
+            try {
+                otpClient.sendOtp(mobileNumber, email, otpValue);
+            } catch (Exception e) {
+                log.warn("Failed to send OTP via OtpClient: {}", e.getMessage());
+            }
+
+            throw new OtpNotFoundException("OTP is required and has been sent to mobile/email");
+        }
+
+        boolean isOtpValid = false;
+        List<OtpVerification> historicalOtps = otpRepository.findByIdentifierAndProcessNameOrderByCreatedAtDesc(
+                mobileNumber != null ? mobileNumber : email, serviceName);
+        if (!historicalOtps.isEmpty() && submitDto.getOtp().equals(historicalOtps.get(0).getOtp())) {
+            isOtpValid = true;
+        } else {
+            try {
+                isOtpValid = otpClient.validateOtp(mobileNumber, email, submitDto.getOtp());
+            } catch (Exception e) {
+                log.warn("OtpClient validation call error: {}", e.getMessage());
+            }
+        }
+
+        if (!isOtpValid) {
+            log.warn("OTP validation failed for identifier: {}", mobileNumber);
+            throw new OtpNotMatchException("OTP validation failed");
+        }
     }
 
     public ServiceResponse<Page<ServiceRequestEntity>> getUserRequests(
@@ -288,10 +333,20 @@ public class ServiceRequestServiceImpl {
                 .orElseThrow(() -> new ConfigurationNotFoundException("Active service configuration not found for service: " + serviceName));
 
         // 2. Fetch current account snapshot from local AccountEntity in MongoDB
-        AccountSnapshot account = accountSnapshotService.getAccountById(accountIdentifier);
+        AccountSnapshot account;
+        try {
+            account = accountSnapshotService.getAccountById(accountIdentifier);
+        } catch (AccountNotFoundException e) {
+            if (!ServiceRoleUtil.isRequestValueSource(config)) {
+                throw e;
+            }
+            account = null;
+        }
 
-        // 3. Resolve current old values from AccountEntity
-        Map<String, Object> oldValues = oldValueResolver.resolveOldValues(account, config, listItemIdentifierValue, null);
+        // 3. Resolve current old values from AccountEntity (request-sourced services have no account old values)
+        Map<String, Object> oldValues = (account == null || ServiceRoleUtil.isRequestValueSource(config))
+                ? new HashMap<>()
+                : oldValueResolver.resolveOldValues(account, config, listItemIdentifierValue, null);
 
         // 4. Map configuration fields merged with old value & value type
         List<ServiceConfigAndOldValuesResponseDto.FieldConfigWithValueDto> fieldDtos = new ArrayList<>();
@@ -338,6 +393,9 @@ public class ServiceRequestServiceImpl {
                         .accountFieldPath(field.getAccountFieldPath())
                         .isFile(field.isFile())
                         .oldValue(rawOldVal)
+                        .valueRole(field.getValueRole())
+                        .pairKey(field.getPairKey())
+                        .readOnly(field.isReadOnly())
                         .build());
             }
         }
@@ -352,6 +410,9 @@ public class ServiceRequestServiceImpl {
                 .targetListField(config.getTargetListField())
                 .listIdentifierField(config.getListIdentifierField())
                 .allowedActions(config.getAllowedActions())
+                .requesterRoles(ServiceRoleUtil.effectiveRequesterRoles(config))
+                .valueSource(config.getValueSource() != null ? config.getValueSource() : "ACCOUNT")
+                .otpRequired(ServiceRoleUtil.isOtpRequired(config))
                 .fields(fieldDtos)
                 .build();
 
@@ -403,6 +464,7 @@ public class ServiceRequestServiceImpl {
                                 .isFile(detail.isFile())
                                 .oldValue(oldVal)
                                 .newValue(newVal)
+                                .valueRole(detail.getValueRole())
                                 .build();
                     })
                     .toList();
@@ -434,6 +496,10 @@ public class ServiceRequestServiceImpl {
 
     private boolean isLikelyFileObjectName(String value) {
         if (value == null || value.isBlank()) {
+            return false;
+        }
+        // MinIO object names never contain whitespace; avoids treating free text (e.g. remarks) as files
+        if (value.chars().anyMatch(Character::isWhitespace)) {
             return false;
         }
 

@@ -37,6 +37,12 @@ public class ServiceRequestSubmitDto {
 
     private String listItemIdentifierValue;
 
+    /** Who submitted the request (RM employee code / client id). */
+    private String requestedBy;
+
+    /** Submitter role, e.g. ROLE_CLIENT or ROLE_RM. Defaults to ROLE_CLIENT when missing. */
+    private String requestedByRole;
+
     public String getEmailAddress() {
         return email;
     }

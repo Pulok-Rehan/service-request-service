@@ -28,4 +28,7 @@ public class FieldChangeDetail {
 
     /** Stored requested new value (presigned URL for file fields when returned to admin) */
     private Object newValue;
+
+    /** CHANGE (old vs new comparison) or INFO (context only). Null for legacy account-based services. */
+    private String valueRole;
 }

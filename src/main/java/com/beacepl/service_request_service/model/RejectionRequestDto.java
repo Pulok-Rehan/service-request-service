@@ -14,4 +14,6 @@ public class RejectionRequestDto {
     private String approverId;
     private String role;
     private String adminRemark;
+    /** Service name of the request being rejected; must match the stored request when provided. */
+    private String serviceName;
 }

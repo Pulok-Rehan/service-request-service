@@ -66,6 +66,10 @@ public class ServiceRequestEntity {
 
     private String listItemIdentifierValue;
 
+    private String requestedBy;
+
+    private String requestedByRole;
+
     @Indexed
     @Builder.Default
     private ServiceRequestStatus status = ServiceRequestStatus.PENDING;

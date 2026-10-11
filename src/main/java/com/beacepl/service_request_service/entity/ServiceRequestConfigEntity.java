@@ -58,6 +58,23 @@ public class ServiceRequestConfigEntity {
     @Builder.Default
     private AudienceType targetAudience = AudienceType.BOTH;
 
+    /**
+     * Roles allowed to SUBMIT this service request (e.g. ROLE_CLIENT, ROLE_RM).
+     * Not to be confused with approvalLevels[].allowedRoles (roles allowed to APPROVE).
+     * When empty, roles are derived from targetAudience.
+     */
+    private List<String> requesterRoles;
+
+    /**
+     * Where old/new values come from:
+     * ACCOUNT (default) - old values resolved from AccountEntity, applied to account on approval.
+     * REQUEST           - old and new values both supplied in the request payload (no account mutation).
+     */
+    private String valueSource;
+
+    /** Whether OTP verification is required on submission. null is treated as true (backward compatible). */
+    private Boolean otpRequired;
+
     /** Downstream target API execution metadata (URL, method, headers, params, body) */
     private ApiConfig apiConfig;
 

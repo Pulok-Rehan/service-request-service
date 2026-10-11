@@ -7,6 +7,8 @@ import com.beacepl.service_request_service.exceptions.OtpNotFoundException;
 import com.beacepl.service_request_service.exceptions.OtpNotMatchException;
 import com.beacepl.service_request_service.model.*;
 import com.beacepl.service_request_service.service.impl.ServiceRequestServiceImpl;
+import com.beacepl.service_request_service.client.SpClient;
+import jakarta.validation.Valid;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,113 @@ public class ServiceRequestController {
 
     private final ServiceRequestServiceImpl serviceRequestService;
     private final ObjectMapper objectMapper;
+    private final SpClient spClient;
+
+    /** Header carrying the submitter role (set by api-gateway / frontend). Falls back to requestedByRole in body. */
+    private static final String ROLE_HEADER = "X-User-Role";
+
+    /**
+     * Commission Change Request (RM only).
+     * POST /service-request/commission-change
+     */
+    @PostMapping(value = "/commission-change", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ServiceResponse submitCommissionChange(
+            @Valid @RequestBody CommissionChangeRequestDto dto,
+            @RequestHeader(value = ROLE_HEADER, required = false) String roleHeader
+    ) throws Exception {
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("investorCode", dto.getInvestorCode());
+        fields.put("platformId", dto.getPlatformId());
+        fields.put("ledgerBalance", dto.getLedgerBalance());
+        fields.put("totalEquity", dto.getTotalEquity());
+        fields.put("netDeposit", dto.getNetDeposit());
+        fields.put("existingCommissionRate", dto.getExistingCommissionRate());
+        fields.put("accountType", dto.getAccountType());
+        fields.put("proposedCommissionRate", dto.getProposedCommissionRate());
+        if (dto.getRemarks() != null) fields.put("remarks", dto.getRemarks());
+
+        ServiceRequestSubmitDto submitDto = ServiceRequestSubmitDto.builder()
+                .serviceName("COMMISSION_CHANGE")
+                .accountId(dto.getAccountId())
+                .investorCode(dto.getInvestorCode())
+                .platformId(dto.getPlatformId())
+                .mobileNumber(dto.getMobileNumber())
+                .email(dto.getEmail())
+                .otp(dto.getOtp())
+                .action("EDIT")
+                .requestedBy(dto.getRequestedBy())
+                .requestedByRole(resolveRole(roleHeader, dto.getRequestedByRole()))
+                .fields(fields)
+                .build();
+
+        return submitWithOtpHandling(submitDto, dto.getMobileNumber(), dto.getEmail());
+    }
+
+    /**
+     * Mobile Apps Request (RM or Client). Runs the SP availability check before submitting.
+     * POST /service-request/mobile-apps
+     */
+    @PostMapping(value = "/mobile-apps", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ServiceResponse submitMobileApps(
+            @Valid @RequestBody MobileAppsRequestDto dto,
+            @RequestHeader(value = ROLE_HEADER, required = false) String roleHeader
+    ) throws Exception {
+        Map<String, Object> fields = new HashMap<>();
+        fields.put("investorCode", dto.getInvestorCode());
+        fields.put("platformId", dto.getPlatformId());
+        fields.put("saleableStock", dto.getSaleableStock());
+        fields.put("availableBalance", dto.getAvailableBalance());
+
+        ServiceRequestSubmitDto submitDto = ServiceRequestSubmitDto.builder()
+                .serviceName("MOBILE_APPS_REQUEST")
+                .accountId(dto.getAccountId())
+                .investorCode(dto.getInvestorCode())
+                .platformId(dto.getPlatformId())
+                .mobileNumber(dto.getMobileNumber())
+                .email(dto.getEmail())
+                .otp(dto.getOtp())
+                .action("ADD")
+                .requestedBy(dto.getRequestedBy())
+                .requestedByRole(resolveRole(roleHeader, dto.getRequestedByRole()))
+                .fields(fields)
+                .build();
+
+        return submitWithOtpHandling(submitDto, dto.getMobileNumber(), dto.getEmail());
+    }
+
+    /**
+     * Lets the frontend check (via SP) whether the mobile app is already available before showing the form.
+     * GET /service-request/mobile-apps/availability?investorCode=&platformId=
+     */
+    @GetMapping("/mobile-apps/availability")
+    public ServiceResponse<Map<String, Object>> checkMobileAppAvailability(
+            @RequestParam String investorCode,
+            @RequestParam String platformId
+    ) {
+        boolean available = spClient.isMobileAppAvailable(investorCode, platformId);
+        Map<String, Object> result = new HashMap<>();
+        result.put("investorCode", investorCode);
+        result.put("platformId", platformId);
+        result.put("available", available);
+        result.put("canRequest", !available);
+        return ServiceResponse.success(available
+                ? "Mobile app is already available for this client"
+                : "Mobile app is not available; request can be submitted", result);
+    }
+
+    private ServiceResponse submitWithOtpHandling(ServiceRequestSubmitDto submitDto, String mobileNumber, String email) throws Exception {
+        try {
+            return serviceRequestService.submitServiceRequest(submitDto, null);
+        } catch (OtpNotFoundException e) {
+            return ResponseMessageUtil.otpRequiredResponse(mobileNumber, email);
+        } catch (OtpNotMatchException e) {
+            return new ServiceResponse("OTP did not match", "428");
+        }
+    }
+
+    private static String resolveRole(String header, String bodyRole) {
+        return (header != null && !header.isBlank()) ? header : bodyRole;
+    }
 
     /**
      * Frontend API to get service configuration along with current old values from AccountEntity for a specific service.

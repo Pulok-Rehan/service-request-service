@@ -23,6 +23,9 @@ public class ServiceConfigAndOldValuesResponseDto {
     private String targetListField;
     private String listIdentifierField;
     private List<String> allowedActions;
+    private List<String> requesterRoles;
+    private String valueSource;
+    private boolean otpRequired;
 
     private List<FieldConfigWithValueDto> fields;
 
@@ -41,5 +44,8 @@ public class ServiceConfigAndOldValuesResponseDto {
         private String accountFieldPath;
         private boolean isFile;
         private Object oldValue;
+        private String valueRole;
+        private String pairKey;
+        private boolean readOnly;
     }
 }

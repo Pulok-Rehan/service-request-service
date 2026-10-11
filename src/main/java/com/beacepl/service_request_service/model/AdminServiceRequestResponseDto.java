@@ -45,6 +45,10 @@ public class AdminServiceRequestResponseDto {
 
     private String listItemIdentifierValue;
 
+    private String requestedBy;
+
+    private String requestedByRole;
+
     private ServiceRequestStatus status;
 
     private Integer currentLevel;
