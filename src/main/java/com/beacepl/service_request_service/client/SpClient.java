@@ -22,13 +22,13 @@ public class SpClient {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    @Value("${sp-service.base-url}")
+    @Value("${sp-service.base-url:http://10.20.242.239:9092}")
     private String baseUrl;
 
-    @Value("${sp-service.mobile-app-check-path}")
+    @Value("${sp-service.mobile-app-check-path:/sp/check-mobile-app}")
     private String mobileAppCheckPath;
 
-    @Value("${sp-service.mobile-app-check.enabled:true}")
+    @Value("${sp-service.mobile-app-check.enabled:false}")
     private boolean mobileAppCheckEnabled;
 
     public SpClient(RestTemplate restTemplate, ObjectMapper objectMapper) {
