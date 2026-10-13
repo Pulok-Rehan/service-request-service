@@ -147,7 +147,7 @@ public class ServiceRequestServiceImpl {
                         : "EDIT");
 
         // 6. Dynamic Field Validation
-        Map<String, Object> submittedFields = submitDto.getFieldValues() != null ? submitDto.getFieldValues()
+        Map<String, Object> submittedFields = submitDto.getFieldValues() != null ? new HashMap<>(submitDto.getFieldValues())
                 : new HashMap<>();
         validationService.validateServiceAndFields(
                 config, action, submitDto.getListItemIdentifierValue(), submittedFields, uploadedFiles);
@@ -164,6 +164,7 @@ public class ServiceRequestServiceImpl {
                         String objectName = minioService.upload(
                                 file, investorCode, generateId, fieldConfig.getFieldName());
                         uploadedFileNames.put(fieldConfig.getFieldName(), objectName);
+                        submittedFields.putIfAbsent(fieldConfig.getFieldName(), objectName);
                     }
                 }
             }

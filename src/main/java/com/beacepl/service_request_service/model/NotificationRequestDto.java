@@ -26,8 +26,8 @@ public class NotificationRequestDto {
 
     private String sender;
 
-    private String receiverMobile;        // unicast
-    private java.util.List<String> receiverMobiles; // multicast
+    private String receiverPlatformId;        // unicast
+    private java.util.List<String> receiverPlatformIds;// multicast
     private String topic;                 // topic
     private String role;                  // role
 

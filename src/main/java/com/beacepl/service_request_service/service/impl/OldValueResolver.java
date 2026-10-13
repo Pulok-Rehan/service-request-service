@@ -44,21 +44,69 @@ public class OldValueResolver {
         }
 
         for (FieldConfigEntity fieldConfig : config.getFields()) {
-            // If field is optional and not submitted by user, skip resolving it unless it's required
-            if (!fieldConfig.isRequired() && (submittedFields != null && !submittedFields.containsKey(fieldConfig.getFieldName()))) {
-                continue;
-            }
-
             String fieldPath = fieldConfig.getAccountFieldPath();
             if (fieldPath == null || fieldPath.isBlank()) {
                 fieldPath = fieldConfig.getFieldName();
             }
 
-            Object resolvedValue = resolveNestedValue(accountMap, fieldPath);
+            Object resolvedValue = resolveFieldValue(accountMap, fieldConfig);
+
+            // If field is optional, account has NO existing value, and user did not submit it, skip it
+            if (!fieldConfig.isRequired()
+                    && resolvedValue == null
+                    && (submittedFields != null && !submittedFields.containsKey(fieldConfig.getFieldName()))) {
+                continue;
+            }
+
             oldValues.put(fieldPath, resolvedValue);
+            if (fieldConfig.getFieldName() != null) {
+                oldValues.put(fieldConfig.getFieldName(), resolvedValue);
+            }
+            if (fieldPath.contains(".")) {
+                oldValues.put(fieldPath.substring(fieldPath.lastIndexOf('.') + 1), resolvedValue);
+            }
         }
 
         return oldValues;
+    }
+
+    private Object resolveFieldValue(Map<String, Object> accountMap, FieldConfigEntity fieldConfig) {
+        String fieldPath = fieldConfig.getAccountFieldPath();
+        if (fieldPath == null || fieldPath.isBlank()) {
+            fieldPath = fieldConfig.getFieldName();
+        }
+
+        Object resolvedValue = resolveNestedValue(accountMap, fieldPath);
+        if (resolvedValue != null) {
+            return resolvedValue;
+        }
+
+        // Fallback 1: Try fieldName if different from accountFieldPath
+        if (fieldConfig.getFieldName() != null && !fieldConfig.getFieldName().equalsIgnoreCase(fieldPath)) {
+            resolvedValue = resolveNestedValue(accountMap, fieldConfig.getFieldName());
+            if (resolvedValue != null) {
+                return resolvedValue;
+            }
+        }
+
+        // Fallback 2: Check inside nested "bank" map if field relates to bank
+        if (accountMap.get("bank") instanceof Map<?, ?> bankMap) {
+            String leaf = fieldPath.contains(".") ? fieldPath.substring(fieldPath.lastIndexOf('.') + 1) : fieldPath;
+            if (bankMap.containsKey(leaf)) {
+                resolvedValue = bankMap.get(leaf);
+            } else if ("bankAccountNumber".equalsIgnoreCase(leaf) || "accountNumber".equalsIgnoreCase(leaf) || "bankAccountNo".equalsIgnoreCase(leaf)) {
+                resolvedValue = bankMap.get("accountNo");
+            }
+        }
+
+        // Fallback 3: Check root accountNo for bankAccountNumber
+        if (resolvedValue == null && ("bankAccountNumber".equalsIgnoreCase(fieldPath)
+                || "bankAccountNumber".equalsIgnoreCase(fieldConfig.getFieldName())
+                || "accountNo".equalsIgnoreCase(fieldPath))) {
+            resolvedValue = accountMap.get("accountNo");
+        }
+
+        return resolvedValue;
     }
 
     /**

@@ -181,6 +181,7 @@ public class AccountSnapshotService {
                     break;
                 case "bank.accountNo":
                 case "accountNo":
+                case "bankAccountNumber":
                     if (account.getBank() == null) account.setBank(new BankEntity());
                     if (value != null) account.getBank().setAccountNo(value.toString());
                     break;

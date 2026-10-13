@@ -67,6 +67,37 @@ class OldValueResolverTest {
     }
 
     @Test
+    @DisplayName("Should resolve flat bank fields like bankAccountNumber, bankName, branchName, routingNumber")
+    void testResolveFlatBankFields() {
+        AccountSnapshot account = AccountSnapshot.builder()
+                .bank(BankEntity.builder()
+                        .accountNo("1234567890785")
+                        .bankName("Brac Bank Ltd.")
+                        .branchName("AGRABAD")
+                        .routingNumber("060150132")
+                        .build())
+                .build();
+
+        ServiceRequestConfigEntity config = ServiceRequestConfigEntity.builder()
+                .serviceName("BANK_CHANGE")
+                .fields(List.of(
+                        FieldConfigEntity.builder().fieldName("bankAccountNumber").accountFieldPath("bankAccountNumber").required(true).build(),
+                        FieldConfigEntity.builder().fieldName("bankName").accountFieldPath("bankName").required(true).build(),
+                        FieldConfigEntity.builder().fieldName("branchName").accountFieldPath("branchName").required(true).build(),
+                        FieldConfigEntity.builder().fieldName("routingNumber").accountFieldPath("routingNumber").required(true).build()
+                ))
+                .build();
+
+        Map<String, Object> oldValues = oldValueResolver.resolveOldValues(account, config, null, null);
+
+        assertNotNull(oldValues);
+        assertEquals("1234567890785", oldValues.get("bankAccountNumber"));
+        assertEquals("Brac Bank Ltd.", oldValues.get("bankName"));
+        assertEquals("AGRABAD", oldValues.get("branchName"));
+        assertEquals("060150132", oldValues.get("routingNumber"));
+    }
+
+    @Test
     @DisplayName("Should resolve list item values for matching nominee NID")
     void testResolveListBasedNomineeOldValues() {
         NomineeEntity nominee1 = NomineeEntity.builder().nid("11111").name("John Doe").relation("Brother").percentage(50).build();
@@ -92,5 +123,30 @@ class OldValueResolverTest {
         assertNotNull(oldValues);
         assertEquals("Jane Doe", oldValues.get("name"));
         assertEquals("Sister", oldValues.get("relation"));
+    }
+
+    @Test
+    @DisplayName("Should resolve optional field as old value when account has existing value, even if not submitted")
+    void testResolveOptionalFieldWithExistingAccountValue() {
+        AccountSnapshot account = AccountSnapshot.builder()
+                .tinNumber("12345678912")
+                .tinCertificate("CP212-SR-4311f2ae-tinCertificate-image_cropper_1790747467886.jpg")
+                .build();
+
+        ServiceRequestConfigEntity config = ServiceRequestConfigEntity.builder()
+                .serviceName("TIN_CHANGE")
+                .fields(List.of(
+                        FieldConfigEntity.builder().fieldName("tinNumber").accountFieldPath("tinNumber").required(true).build(),
+                        FieldConfigEntity.builder().fieldName("tinCertificate").accountFieldPath("tinCertificate").required(false).file(true).build()
+                ))
+                .build();
+
+        // User submits only tinNumber, not tinCertificate
+        Map<String, Object> submittedFields = Map.of("tinNumber", "98765432100");
+        Map<String, Object> oldValues = oldValueResolver.resolveOldValues(account, config, null, submittedFields);
+
+        assertNotNull(oldValues);
+        assertEquals("12345678912", oldValues.get("tinNumber"));
+        assertEquals("CP212-SR-4311f2ae-tinCertificate-image_cropper_1790747467886.jpg", oldValues.get("tinCertificate"));
     }
 }
